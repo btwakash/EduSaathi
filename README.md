@@ -1,3 +1,18 @@
+<p align="center">
+  <img src="assets/logo.png" width="130" alt="EduSaathi logo">
+</p>
+
+<h1 align="center">EduSaathi</h1>
+
+<p align="center">
+  Student planner, study tools &amp; career prep in one app.<br>
+  Works on slow or unstable internet.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Android-2996d0" alt="Android">
+  <img src="https://img.shields.io/badge/built%20by-Akash%20Kumar%20Yadav-0d477d" alt="Author">
+</p>
 # EduSaathi
 
 Your calm study companion. EduSaathi puts planning, learning, attendance, doubts, community and career prep in one Android app, built to stay easy on the eyes and work with unstable internet.
