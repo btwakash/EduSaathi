@@ -339,10 +339,10 @@ html[data-gs="clear"] #toast,html[data-gs="clear"] .mn.on{background:color-mix(i
 <section id="planner">
 <div class="card"><h3>Exam roadmap</h3><p class="why"><b>Solves:</b> not knowing what to study first — AI weightage, priorities and a dated plan.</p>
 <div class="row"><input id="rms" class="grow" placeholder="Subject"><input id="rme" type="date" style="width:auto"></div>
-<textarea id="rmt" rows="3" placeholder="Paste your syllabus / unit list"></textarea>
-<textarea id="rmp" rows="2" placeholder="Optional: paste previous-year questions (PYQs) for sharper weightage"></textarea>
+<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><textarea id="rmt" rows="3" style="flex:1 1 0;min-width:0" placeholder="Paste your syllabus / unit list, or tap Upload"></textarea><button type="button" class="s" data-up="rmt" style="flex:0 0 auto;margin-top:3px;min-height:44px" aria-label="Upload syllabus file">📎 Upload</button></div><div class="sm" id="rmts"></div>
+<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><textarea id="rmp" rows="2" style="flex:1 1 0;min-width:0" placeholder="Optional: paste PYQs or upload a paper"></textarea><button type="button" class="s" data-up="rmp" style="flex:0 0 auto;margin-top:3px;min-height:44px" aria-label="Upload PYQ file">📎 Upload</button></div><div class="sm" id="rmps"></div>
 <div class="row"><button id="rmg">Analyse & build roadmap</button><a class="btn s" id="rmq" target="_blank" rel="noopener" href="#">Find PYQs</a><button class="s" id="rma" style="display:none">Add to to-do</button></div>
-<p class="sm">Weightage is an AI estimate from your syllabus and any papers you paste. Verify with your official syllabus.</p><div id="rmo"></div></div>
+<p class="sm">Upload a PDF, Word file, photo or text file — the AI reads it for you. Weightage is an AI estimate from your syllabus and any papers you add. Verify with your official syllabus.</p><div id="rmo"></div></div>
 <div class="card"><h3>Attendance</h3><p class="why"><b>Solves:</b> falling short of the minimum — see how many classes you can miss or must attend.</p>
 <div class="row"><input id="ats" class="grow" placeholder="Subject"><button id="ata">Add</button><label class="sm">Target <input id="att_t" type="number" min="1" max="100" value="75" style="width:64px">%</label></div><div id="atl"></div></div>
 <div class="card"><h3>Fair Exams — Mock Test</h3><p class="why"><b>Solves:</b> exam-day fear — answers auto-save; if the connection drops you resume where you were. Light proctoring: only tab-switch count, no camera.</p>
@@ -427,45 +427,71 @@ html[data-gs="clear"] #toast,html[data-gs="clear"] .mn.on{background:color-mix(i
 <div id="toast" role="status"></div>
 <nav id="nv"></nav>
 <script>
-(function(){addEventListener('error',function(){if(window.__boot||document.getElementById('rcv')||!document.body)return;var d=document.createElement('div');d.id='rcv';d.style.cssText='position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:99999;padding:12px 14px;border-radius:14px;background:#b3261e;color:#fff;font:14px/1.4 sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.4)';d.innerHTML='App data me kuch gadbad hai. <button style="margin-left:8px;padding:8px 12px;border:0;border-radius:10px;font-weight:600" onclick="Object.keys(localStorage).filter(function(k){return k.indexOf(\'uc_\')==0}).forEach(function(k){localStorage.removeItem(k)});location.reload()">Repair &amp; restart</button>';document.body.appendChild(d)})})();
+/* EduSaathi safety layer: never lose data, never wipe on error */
+(function(){
+var W=window,MEM={},ERRS=[];W.__MEM=MEM;W.__ERRS=ERRS;W.__bootDone=false;
+/* ---------- IndexedDB mirror (big quota, survives localStorage limits/wipes) ---------- */
+var dbp=null,q={},qt=null;
+function open(){if(dbp)return dbp;dbp=new Promise(function(ok,no){try{var r=indexedDB.open('edusaathi',1);r.onupgradeneeded=function(){r.result.createObjectStore('kv',{keyPath:'k'})};r.onsuccess=function(){ok(r.result)};r.onerror=function(){no(r.error)};r.onblocked=function(){no('blocked')}}catch(e){no(e)}});dbp.catch(function(){});return dbp}
+function flush(){qt=null;var items=q;q={};var ks=Object.keys(items);if(!ks.length)return;open().then(function(db){var tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv');ks.forEach(function(k){var it=items[k];if(it===null)st.delete(k);else st.put(it)})}).catch(function(){})}
+W.__idbPut=function(k,v,ls){q[k]={k:k,v:v,ls:ls!==false,t:Date.now()};if(!qt)qt=setTimeout(flush,400)};
+W.__idbDel=function(k){q[k]=null;if(!qt)qt=setTimeout(flush,400)};
+addEventListener('pagehide',flush);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')flush()});
+function all(){return open().then(function(db){return new Promise(function(ok,no){var r=db.transaction('kv').objectStore('kv').getAll();r.onsuccess=function(){ok(r.result||[])};r.onerror=function(){no(r.error)}})})}
+function lsKeys(){var o=[];try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('uc_')===0)o.push(k)}}catch(e){}return o}
+function snapshot(){lsKeys().forEach(function(k){try{W.__idbPut(k,localStorage.getItem(k),true)}catch(e){}})}
+/* restore: only fills what is missing or what could not fit in localStorage; never overwrites newer local data */
+function restore(){return all().then(function(rows){var n=0;rows.forEach(function(e){if(!e||typeof e.k!=='string'||e.k.indexOf('uc_')!==0||typeof e.v!=='string')return;var cur=null;try{cur=localStorage.getItem(e.k)}catch(x){}
+var key=e.k.slice(3);
+if(e.ls===false){MEM[key]=e.v;try{localStorage.setItem(e.k,e.v);delete MEM[key];W.__idbPut(e.k,e.v,true)}catch(x){}n++}
+else if(cur===null){try{localStorage.setItem(e.k,e.v)}catch(x){MEM[key]=e.v}n++}});W.__restored=n})}
+/* ---------- error handling ---------- */
+function dismiss(){var d=document.getElementById('rcv');if(d)d.remove()}
+W.__repair=function(){
+/* SAFE repair: nothing valid is deleted. Only keys that are truly unreadable JSON are moved aside (kept as backup). */
+var bad=[];lsKeys().forEach(function(k){try{JSON.parse(localStorage.getItem(k))}catch(e){bad.push(k)}});
+bad.forEach(function(k){try{W.__idbPut('bad_'+k,localStorage.getItem(k),true);localStorage.removeItem(k);W.__idbDel(k)}catch(e){}});
+flush();setTimeout(function(){location.reload()},500)};
+function banner(){if(document.getElementById('rcv')||!document.body)return;var d=document.createElement('div');d.id='rcv';
+d.style.cssText='position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:99999;padding:12px 14px;border-radius:14px;background:#7a4a00;color:#fff;font:14px/1.4 sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.4)';
+var e=ERRS[0]||{};
+d.innerHTML='<div>Ek section sahi se load nahi hua. <b>Aapka data safe hai</b> (kuch delete nahi hoga).</div><div id="rcvd" style="font-size:11px;opacity:.8;margin-top:4px;word-break:break-all"></div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button id="rc1" style="padding:8px 12px;border:0;border-radius:10px;font-weight:600">Reload</button><button id="rc2" style="padding:8px 12px;border:0;border-radius:10px;font-weight:600">Safe repair</button><button id="rc3" style="padding:8px 12px;border:0;border-radius:10px;font-weight:600;background:#fff3">Hide</button></div>';
+document.body.appendChild(d);document.getElementById('rcvd').textContent=String(e.msg||'').slice(0,160)+(e.src?' ['+e.src+':'+e.line+']':'');
+document.getElementById('rc1').onclick=function(){location.reload()};document.getElementById('rc2').onclick=W.__repair;document.getElementById('rc3').onclick=dismiss}
+W.__banner=banner;
+addEventListener('error',function(ev){var m=String(ev&&ev.message||'');
+if(!ev.filename&&/Script error|ResizeObserver/i.test(m))return; /* benign / cross-origin noise */
+if(/ResizeObserver/i.test(m))return;
+ERRS.push({msg:m,src:String(ev.filename||'').split('/').pop(),line:ev.lineno});
+try{localStorage.setItem('ucerr',JSON.stringify(ERRS.slice(0,3).concat([{t:Date.now()}])))}catch(e){}
+});
+/* ---------- quota warning (storage full) ---------- */
+var warned=0;W.__quota=function(){if(warned||!document.body)return;warned=1;var d=document.createElement('div');d.id='qfull';d.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom,0px));z-index:99998;padding:10px 14px;border-radius:12px;background:#7a4a00;color:#fff;font:13px/1.4 sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.4)';
+d.textContent='Phone ki app-storage bhar gayi hai. Aapka naya data backup me save ho raha hai, par purane bade notes/lectures ya wallpaper hata do. (Tap to hide)';d.onclick=function(){d.remove()};document.body.appendChild(d)};
+/* ---------- boot gate: restore first, then run app sections (each isolated) ---------- */
+W.__start=function(){
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+var done=false,go=function(){if(done)return;done=true;
+var els=document.querySelectorAll('script[type="text/plain"][data-app]');
+for(var i=0;i<els.length;i++){var s=document.createElement('script');s.text=els[i].textContent+'\n//# sourceURL=app-section-'+i+'.js';document.body.appendChild(s);s.remove()}
+W.__bootDone=true;W.__boot=1;
+snapshot();if(ERRS.length)banner()};
+var t=setTimeout(go,2500);
+restore().catch(function(){}).then(function(){clearTimeout(t);go()})};
+})();
 </script>
-<script>
-const $=id=>document.getElementById(id);
-const S={get(k,d){try{const v=localStorage.getItem('uc_'+k);if(!v)return d;const x=JSON.parse(v);if(d===undefined)return x===null?d:x;if(x===null||typeof x!==typeof d||Array.isArray(x)!==Array.isArray(d))return d;if(Array.isArray(x))return x.filter(i=>i!=null);if(typeof x==='object')return{...d,...x};return x}catch(e){return d}},set(k,v){try{localStorage.setItem('uc_'+k,JSON.stringify(v));sync()}catch(e){}}};
-const IC={home:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',study:'<path d="M4 5a2 2 0 012-2h13v15H6a2 2 0 00-2 2zM4 20a2 2 0 002 1h13"/>',planner:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',connect:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5 0 4 2 4 5"/>',profile:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>'};
-const NV=[['home',['home'],'Today'],['study',['classes','doubts'],'Study'],['planner',['planner','agenda'],'Plan'],['connect',['community','career'],'Connect'],['profile',['profile'],'Me']];
-const THM={light:['Light'],dark:['Dark'],forest:['Forest Mist 🌿',['#4f8a6e','#7fb59b']],ocean:['Ocean Calm 🌊',['#4a8fb0','#7bb6cf']],lavender:['Lavender Dusk 💜',['#8071c0','#a99bd8']],sand:['Warm Sand 🏜️',['#b98a5e','#d4b088']],rose:['Rose Quartz 🌸',['#c0788f','#dfa8ba']],midnight:['Midnight Calm 🌙',['#5b7cc9','#7f9fe2']],moss:['Moss Night 🍃',['#3f9a7c','#6cc4a4']]};
-let curG='home';
-const ACC={home:['#6273ab','#8294c4'],study:['#4f819a','#76a8bd'],planner:['#a97a52','#cba078'],connect:['#a96a7f','#c993a7'],profile:['#528a76','#7db09b']};const SUB={planner:'Academic',agenda:'Agenda',classes:'Lectures & labs',doubts:'Notebook & AI',community:'Community',career:'Career'};let curS={};
-$('nv').innerHTML=NV.map(g=>`<button data-t="${g[0]}" aria-label="${g[2]}"><svg viewBox="0 0 24 24">${IC[g[0]]}</svg><small>${g[2]}</small></button>`).join('');
-function go(g,sub,np){const gr=NV.find(x=>x[0]===g),s=sub||(curS[g]==='custom'?0:curS[g])||gr[1][0];curS[g]=s;curG=g;applyAcc();document.querySelectorAll('section').forEach(e=>e.classList.toggle('on',e.id===s));document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===g));const sg=$('seg'),m=gr[1].length>1;sg.style.display=m?'flex':'none';sg.replaceChildren(...(m?gr[1].map(id=>{const b=document.createElement('button');b.textContent=SUB[id];b.className=id===s?'on':'';b.onclick=()=>go(g,id);return b}):[]));scrollTo({top:0,behavior:'instant'});if(s==='classes')vlr();if(!np)hpush()}
-$('nv').onclick=e=>{const b=e.target.closest('button');if(b)go(b.dataset.t)};go('home');
-let toastT,toastT2;function toast(m){if($('dnd').checked&&running)return;const t=$('toast');clearTimeout(toastT);clearTimeout(toastT2);t.classList.remove('bye');t.textContent=m;t.style.display='block';t.style.animation='none';void t.offsetWidth;t.style.animation='';toastT=setTimeout(()=>{t.classList.add('bye');toastT2=setTimeout(()=>{t.style.display='none';t.classList.remove('bye')},350)},4500)}
-// theme / net
 
-const ACS={sage:['Sage',['#528a76','#7db09b']],sky:['Sky',['#4f819a','#76a8bd']],indigo:['Indigo',['#6273ab','#8294c4']],lilac:['Lilac',['#7b6ca8','#a396c9']],sand:['Sand',['#a97a52','#cba078']],rose:['Rose',['#a96a7f','#c993a7']],slate:['Slate',['#5f6e80','#8796a8']]};
+<script type="text/plain" data-app>
+var HI;
+</script>
+<script type="text/plain" data-app>
+function go(g,sub,np){const gr=NV.find(x=>x[0]===g),s=sub||(curS[g]==='custom'?0:curS[g])||gr[1][0];curS[g]=s;curG=g;applyAcc();document.querySelectorAll('section').forEach(e=>e.classList.toggle('on',e.id===s));document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===g));const sg=$('seg'),m=gr[1].length>1;sg.style.display=m?'flex':'none';sg.replaceChildren(...(m?gr[1].map(id=>{const b=document.createElement('button');b.textContent=SUB[id];b.className=id===s?'on':'';b.onclick=()=>go(g,id);return b}):[]));scrollTo({top:0,behavior:'instant'});if(s==='classes')vlr();if(!np)hpush()}
+function toast(m){if($('dnd').checked&&running)return;const t=$('toast');clearTimeout(toastT);clearTimeout(toastT2);t.classList.remove('bye');t.textContent=m;t.style.display='block';t.style.animation='none';void t.offsetWidth;t.style.animation='';toastT=setTimeout(()=>{t.classList.add('bye');toastT2=setTimeout(()=>{t.style.display='none';t.classList.remove('bye')},350)},4500)}
 function applyAcc(){const T=THM[document.documentElement.dataset.theme],u=S.get('ui',{}),C=u.ac&&ACS[u.ac],A=(C&&C[1])||(T&&T[1])||ACC[curG],r=document.documentElement.style;r.setProperty('--p',A[0]);r.setProperty('--p2',A[1])}
 function setTheme(v,quiet){const d=document.documentElement;if(v)d.dataset.theme=v;else delete d.dataset.theme;S.set('theme',v||'');applyAcc();if(!quiet&&v&&THM[v])toast('Theme: '+THM[v][0])}
-$('thm').onclick=()=>{const ks=Object.keys(THM),c=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');setTheme(ks[(ks.indexOf(c)+1)%ks.length])};
-if(S.get('theme'))document.documentElement.dataset.theme=S.get('theme');
 function net(){$('net').textContent=navigator.onLine?'Online':'Offline — saved locally';$('exnet')&&0}
-addEventListener('online',()=>{net();toast('Back online — progress synced ✔')});addEventListener('offline',()=>{net();toast('You are offline. Everything is saved on this device.')});net();
-// settings
-$('ld').checked=S.get('ld',false);
-const applyLD=()=>document.body.classList.toggle('lowdata',$('ld').checked);applyLD();
-$('ld').onchange=()=>{S.set('ld',$('ld').checked);applyLD()};
-// streak / goal
-const today=new Date().toISOString().slice(0,10);
-let dn=S.get('day',{d:today,n:0});if(dn.d!==today)dn={d:today,n:0};
-function stats(){$('streak').textContent=S.get('streak',{n:0}).n;$('done').textContent=dn.n;$('gbar').style.width=Math.min(100,dn.n*25)+'%'}stats();
+function stats(){$('streak').textContent=S.get('streak',{n:0}).n;$('done').textContent=dn.n;$('gbar').style.width=Math.min(100,dn.n*25)+'%'}
 function bump(){dn.n++;S.set('day',dn);let s=S.get('streak',{n:0,last:''});if(s.last!==today){const y=new Date(Date.now()-864e5).toISOString().slice(0,10);s={n:s.last===y?s.n+1:1,last:today};S.set('streak',s)}stats()}
-// pomodoro
-let left=25*60,running=false,tm,el=0,mode='f',endAt=0,PA=null;
-const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
-const pom=S.get('pom',{len:25,br:5,auto:true,next:false});
-$('len').value=pom.len||25;$('brk').value=pom.br||5;$('arest').checked=pom.auto!==false;$('anext').checked=!!pom.next;
-const sp=()=>S.set('pom',{len:+$('len').value,br:+$('brk').value||5,auto:$('arest').checked,next:$('anext').checked});
-const dur=()=>(mode==='f'?+$('len').value:(+$('brk').value||5))*60;
 function show(){$('clk').textContent=fmt(left);$('pm').textContent=mode==='f'?'Focus':'Rest — look away, stretch, sip water';document.body.classList.toggle('rest',mode==='b');document.body.classList.toggle('run',running&&mode==='f');document.title=running?fmt(left)+' · EduSaathi':'EduSaathi'}
 function unlock(){try{PA=PA||new(window.AudioContext||window.webkitAudioContext)();if(PA.state==='suspended')PA.resume()}catch(e){}}
 function chime(){unlock();try{const t0=PA.currentTime;[0,.4,.8,1.5,1.9,2.3].forEach((d,i)=>{const o=PA.createOscillator(),g=PA.createGain();o.type='triangle';o.frequency.value=i%2?988:740;g.gain.setValueAtTime(.0001,t0+d);g.gain.exponentialRampToValueAtTime(.6,t0+d+.03);g.gain.exponentialRampToValueAtTime(.001,t0+d+.35);o.connect(g);g.connect(PA.destination);o.start(t0+d);o.stop(t0+d+.4)})}catch(e){}navigator.vibrate&&navigator.vibrate([300,120,300,120,300])}
@@ -474,14 +500,6 @@ function pt(){const r=Math.max(0,Math.ceil((endAt-Date.now())/1000));if(r===left
 if(left<=0){clearInterval(tm);running=false;chime();
 if(mode==='f'){bump();logm();hist();el=0;confetti();if($('arest').checked){mode='b';left=dur();toast('Session done! Rest for '+Math.round(left/60)+' min.');start()}else{left=dur();$('st').textContent='Start';toast('Session done! Stand up, stretch, sit straight.')}}
 else{mode='f';left=dur();el=0;toast('Rest over. Ready for the next session?');if($('anext').checked)start();else $('st').textContent='Start'}show()}}
-$('len').onchange=()=>{sp();if(!running&&mode==='f'){left=dur();show()}};$('brk').onchange=$('arest').onchange=$('anext').onchange=sp;
-$('st').onclick=()=>{if(running){clearInterval(tm);running=false;$('st').textContent='Resume';show()}else start()};
-$('rs').onclick=()=>{clearInterval(tm);running=false;el=0;mode='f';left=dur();$('st').textContent='Start';show()};
-left=dur();show();
-// lectures (YouTube, resumable)
-const lx=()=>S.get('lx',[]);let lxE=null,YP=null,YR=null,cL=null,yT=null;
-const tfmt=s=>{s=Math.max(0,Math.floor(s||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s%60).padStart(2,'0')};
-const lpc=l=>l.done?100:l.dur?Math.min(100,Math.round((l.pos||0)/l.dur*100)):(l.pct||0);
 function lecs(){const a=lx();$('lsm').textContent=a.length?a.filter(l=>lpc(l)>=100).length+' of '+a.length+' lectures completed':'';
 $('lec').replaceChildren(...a.map(l=>{const p=lpc(l),e=document.createElement('div');e.className='li';e.style.display='block';
 const r=document.createElement('div');r.className='row';r.style.justifyContent='space-between';const n=document.createElement('b');n.textContent=l.title;n.className='grow';const q=document.createElement('span');q.className='sm';q.id='lt'+l.id;q.textContent=(l.dur?tfmt(l.pos)+' / '+tfmt(l.dur)+' · ':'')+p+'%';r.append(n,q);
@@ -492,8 +510,6 @@ bt.append(gb,kebab([['Rename / edit',()=>{lxE=lxE===l.id?null:l.id;lecs()}],['Ma
 e.append(r,bar,bt);
 if(lxE===l.id){const ed=document.createElement('div');ed.className='ed';const mi=(ph,v,t)=>{const z=document.createElement('input');z.type=t;z.placeholder=ph;z.value=v;z.setAttribute('aria-label',ph);return z};const ni=mi('Lecture name',l.title,'text'),ui=mi('YouTube link','https://youtu.be/'+l.vid,'text'),pi=mi('% done',p,'number');pi.min=0;pi.max=100;const sv=document.createElement('button');sv.textContent='Save';sv.onclick=()=>{const v=ytid(ui.value);if(!v){toast('That is not a valid YouTube link.');return}upd(o=>{o.title=ni.value.trim()||o.title;if(v!==o.vid){o.vid=v;o.pos=0;o.dur=0}const np=Math.max(0,Math.min(100,+pi.value||0));if(np!==p){o.done=np>=100?1:0;o.pct=np;if(o.dur)o.pos=o.dur*np/100}});lxE=null;lecs()};ed.append(ni,ui,pi,sv);e.append(ed)}
 return e}));if(!a.length)$('lec').innerHTML='<p class="sm">No lectures yet. Paste a YouTube link above to start.</p>'}
-$('lxa').onclick=async()=>{const v=ytid($('lxu').value);if(!v){toast('Paste a valid YouTube link.');return}let t=$('lxn').value.trim();const a=lx();if(!t){try{const c=new AbortController();setTimeout(()=>c.abort(),4000);const r=await fetch('https://noembed.com/embed?url='+encodeURIComponent('https://www.youtube.com/watch?v='+v),{signal:c.signal});t=(await r.json()).title||''}catch(e){}}a.push({id:Date.now().toString(36),title:t||'Lecture '+(a.length+1),vid:v,pos:0,dur:0,pct:0,done:0});S.set('lx',a);$('lxu').value=$('lxn').value='';lecs();toast('Lecture added')};
-$('lxu').onkeydown=e=>{if(e.key==='Enter')$('lxa').click()};
 function ylo(){return YR||(YR=new Promise((ok,no)=>{if(window.YT&&YT.Player)return ok();const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';s.onerror=()=>{YR=null;no()};window.onYouTubeIframeAPIReady=ok;document.head.appendChild(s)}))}
 function lsave(fin){if(!YP||!YP.getCurrentTime||cL==null)return;const s=lx(),l=s.find(x=>x.id===cL);if(!l)return;const p=YP.getCurrentTime(),d=YP.getDuration();if(d>0)l.dur=d;if(p>0)l.pos=p;if(l.dur&&l.pos>=l.dur-8)l.done=1;S.set('lx',s);const pc=lpc(l),b=$('lb'+l.id),t=$('lt'+l.id);if(b)b.style.width=pc+'%';if(t)t.textContent=(l.dur?tfmt(l.pos)+' / '+tfmt(l.dur)+' · ':'')+pc+'%';if(fin)lecs()}
 function lerr(l){const t=Math.floor(l.pos||0);$('lpe').innerHTML='YouTube would not play this video inside the app. <a target="_blank" rel="noopener" href="https://youtu.be/'+l.vid+'?t='+t+'">Open it in YouTube at '+tfmt(t)+'</a>, then use ⋮ → Rename / edit to log your % done.'}
@@ -502,17 +518,8 @@ try{await ylo()}catch(e){lerr(l);return}
 if(YP){try{YP.destroy()}catch(x){}YP=null}$('ytw').innerHTML='<div id="ytp"></div>';
 YP=new YT.Player('ytp',{width:'100%',height:'100%',videoId:l.vid,playerVars:{start:Math.floor(st),playsinline:1,rel:0,modestbranding:1,fs:0,iv_load_policy:3},events:{onReady:()=>{$('lpe').textContent='';$('lpl').scrollIntoView({behavior:'smooth',block:'center'})},onStateChange:e=>{if(e.data===2||e.data===0)lsave(1)},onError:()=>lerr(l)}});clearInterval(yT);yT=setInterval(()=>lsave(0),4000)}
 function lclose(){yhide();lsave(1);clearInterval(yT);if(YP){try{YP.destroy()}catch(x){}YP=null}cL=null;$('ytw').innerHTML='';$('lpl').style.display='none';lecs()}
-$('lpx').onclick=lclose;document.addEventListener('visibilitychange',()=>{if(document.hidden)lsave(0)});addEventListener('pagehide',()=>lsave(0));
-lecs();
-// lab
-function lab(){const v=+$('V').value,r=+$('R').value;$('vv').textContent=v;$('rv').textContent=r;$('I').textContent=(v/r*1000).toFixed(1)}$('V').oninput=$('R').oninput=lab;lab();
-// AI
-let CS=null;(async()=>{try{CS=await claude.use('sample')}catch(e){}})();
-const AID={m:'cloud',pv:'poll',model:'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',url:'',cm:''};
-const AIC=()=>({...AID,...S.get('aic',{}),key:localStorage.getItem('ucaik')||''});
-let WL=null,WLid='';
+function lab(){const v=+$('V').value,r=+$('R').value;$('vv').textContent=v;$('rv').textContent=r;$('I').textContent=(v/r*1000).toFixed(1)}
 async function wl(cb){const c=AIC();if(WL&&WLid===c.model)return WL;if(!navigator.gpu)throw new Error('nogpu');const w=await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm');WL=await w.CreateMLCEngine(c.model,{initProgressCallback:p=>cb&&cb(p.text,p.progress)});WLid=c.model;return WL}
-const PRE={groq:{url:'https://api.groq.com/openai/v1',model:'llama-3.3-70b-versatile',key:1,link:'https://console.groq.com/keys'},openrouter:{url:'https://openrouter.ai/api/v1',model:'meta-llama/llama-3.3-70b-instruct:free',key:1,link:'https://openrouter.ai/keys'},poll:{url:'https://text.pollinations.ai/openai',model:'openai',key:0}};
 async function rem(url,model,key,msgs,o){const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),30000);try{const r=await fetch(url.replace(/\/$/,'')+'/chat/completions',{method:'POST',signal:ctl.signal,headers:{'Content-Type':'application/json',...(key?{Authorization:'Bearer '+key}:{})},body:JSON.stringify({model,messages:msgs,stream:true,temperature:.5,max_tokens:1400})});if(!r.ok)throw new Error('http '+r.status);let full='';const up=()=>o.onText&&o.onText({text:full});if(!r.body||(r.headers.get('content-type')||'').includes('application/json')){const j=await r.json();full=j.choices[0].message.content||'';up();return full}const rd=r.body.getReader(),dc=new TextDecoder();let buf='';for(;;){const x=await rd.read();if(x.done)break;clearTimeout(to);buf+=dc.decode(x.value,{stream:true});const ls=buf.split('\n');buf=ls.pop();for(const l of ls){const m=l.trim();if(!m.startsWith('data:')||m.includes('[DONE]'))continue;try{const d=JSON.parse(m.slice(5)).choices[0].delta.content;if(d){full+=d;up()}}catch(e){}}}if(!full.trim())throw new Error('empty');return full}finally{clearTimeout(to)}}
 async function sample(prompt,o){o=o||{};const c=AIC(),msgs=[...(o.sys?[{role:'system',content:o.sys}]:[]),...(o.hist||[]).slice(-8),{role:'user',content:prompt.slice(0,9000)}];let full='';const up=()=>o.onText&&o.onText({text:full});
 if(c.m==='claude'){if(!CS)throw new Error('nocs');const r=await CS((o.sys?o.sys+'\n\n':'')+prompt.slice(0,9000),{cache:false,onText:o.onText});return{text:r.text}}
@@ -521,21 +528,9 @@ if(c.m==='remote'&&c.url){const r=await fetch(c.url.replace(/\/$/,'')+'/chat/com
 for(;;){const x=await rd.read();if(x.done)break;buf+=dc.decode(x.value,{stream:true});const ls=buf.split('\n');buf=ls.pop();for(const l of ls){const m=l.trim();if(!m.startsWith('data:')||m.includes('[DONE]'))continue;try{const d=JSON.parse(m.slice(5)).choices[0].delta.content;if(d){full+=d;up()}}catch(e){}}}return{text:full}}
 const en=await wl((tx,p)=>{full='Loading AI model… '+Math.round(p*100)+'% (first time only, then works offline)';up()});full='';
 const st=await en.chat.completions.create({messages:msgs,stream:true,temperature:.4,max_tokens:900});for await(const ch of st){const d=ch.choices[0]&&ch.choices[0].delta.content;if(d){full+=d;up()}}return{text:full}}
-sample.json=async(p,o)=>{const r=await sample(p+'\nReturn valid JSON only, no extra text.',o),m=r.text.match(/[\[{][\s\S]*[\]}]/);if(!m)throw new Error('json');let j=JSON.parse(m[0]);if(!Array.isArray(j)&&/flashcards/.test(p))j=Object.values(j).find(Array.isArray)||[];return j};
 function aiErr(e){if(e&&(e.message==='nocs'||e.code==='not_granted'))return 'Claude AI is not available here. Switch to “On this device” in Me → AI engine.';return e&&e.message==='nogpu'?'On-device AI needs a WebGPU browser (recent Chrome/Edge). Or connect your own open-source server in Me → AI engine.':'AI could not connect. Check your internet, or add a free Groq key in Me → AI engine for fast, smart answers.'}
 async function ai(prompt,box,sys,hist){try{box.textContent='Thinking…';const r=await sample(prompt,{sys,hist,onText:t=>{box.textContent=t.text}});return r.text}catch(e){box.textContent=aiErr(e)}}
 function say(c,t,cls){const d=document.createElement('div');d.className='m '+cls;d.textContent=t;c.appendChild(d);c.scrollTop=1e9;return d}
-const TUT='You are EduSaathi, an expert and friendly tutor for college students. Answer accurately and directly first, then explain step by step with one small example. Use simple language, show formulas or code when useful, and keep it under 180 words unless asked for more. If you are unsure, say so instead of guessing.';
-const TH=[];$('ask').onclick=()=>{const q=$('q').value.trim();if(!q)return;say($('chat'),q,'u');$('q').value='';ai(q,say($('chat'),'','b'),TUT,TH).then(t=>{if(t){TH.push({role:'user',content:q},{role:'assistant',content:t});if(TH.length>12)TH.splice(0,2)}})};
-$('q').onkeydown=e=>{if(e.key==='Enter')$('ask').click()};
-$('sum').onclick=()=>{const n=$('nt').value.trim();if(!n)return;$('sumo').style.display='block';ai('Summarise these notes into 5 bullet points and 3 quick revision questions:\n'+n,$('sumo'),TUT)};
-$('hb').onclick=()=>{const q=$('hq').value.trim();if(!q)return;say($('hc'),q,'u');$('hq').value='';ai(q,say($('hc'),'','b'),'You are a friendly university helpdesk agent. Give short, practical answers and say when to contact the university office.')};
-$('rb').onclick=()=>toast('Thanks! Anonymous rating saved for '+$('rc').value);
-$('raise').onclick=()=>{const t=$('ld1').value.trim()||'General';$('lq').textContent='✋ You are #'+(1+Math.floor(Math.random()*3))+' in the doubt queue for “'+t+'”. A mentor will join shortly.'};
-// todo
-let flt='all',tEd=-1;
-const dd=x=>x.d?Math.ceil((new Date(x.d)-new Date(today))/864e5):null;
-const dlab=x=>{const n=dd(x);return n==null?'No date':n<0?'Overdue '+(-n)+'d':n===0?'Today':n===1?'Tomorrow':'In '+n+' days'};
 function pl(){const all=S.get('plan',[]).map((x,i)=>({...x,i}));all.sort((x,y)=>(!!x.done-!!y.done)||(x.d||'9').localeCompare(y.d||'9'));
 const v=all.filter(x=>flt==='done'?x.done:!x.done&&(flt!=='today'||(dd(x)!=null&&dd(x)<=2)));
 $('pl').replaceChildren(...v.map(x=>{const n=dd(x),e=document.createElement('div');e.className='li';const c=document.createElement('input');c.type='checkbox';c.checked=!!x.done;c.onchange=()=>{const p=S.get('plan',[]);p[x.i].done=c.checked;S.set('plan',p);if(c.checked)confetti(18);pl()};
@@ -548,44 +543,22 @@ if(!v.length)$('pl').textContent='Nothing here. Add a deadline above.';
 const open=all.filter(x=>!x.done);$('sub').textContent=open.length+' open · '+open.filter(x=>dd(x)!=null&&dd(x)<=2).length+' due within 2 days';
 const cur=$('ft').value;$('ft').replaceChildren(new Option('General study',''),...open.map(x=>new Option(x.t,x.i)));$('ft').value=cur;ag()}
 function ag(){const a=S.get('plan',[]).filter(x=>!x.done&&x.d).sort((x,y)=>x.d.localeCompare(y.d)),g={};a.forEach(x=>(g[x.d]=g[x.d]||[]).push(x));$('ag').replaceChildren(...Object.keys(g).map(d=>{const e=document.createElement('div');e.className='li';e.style.display='block';const h=document.createElement('b');h.textContent=new Date(d+'T00:00').toDateString();const l=document.createElement('div');l.className='sm';l.textContent=g[d].map(x=>x.k+': '+x.t).join(' · ');e.append(h,l);return e}));if(!a.length)$('ag').textContent='No dated items yet.'}
-$('pa').onclick=()=>{const t=$('pt').value.trim();if(!t)return;const a=S.get('plan',[]);a.push({t,d:$('pd').value,k:$('pk').value,done:false});S.set('plan',a);$('pt').value='';pl()};
-$('pt').onkeydown=e=>{if(e.key==='Enter')$('pa').click()};
-document.querySelectorAll('#flt button').forEach(b=>b.onclick=()=>{flt=b.dataset.f;document.querySelectorAll('#flt button').forEach(x=>x.classList.toggle('on',x===b));pl()});
 function logm(){const v=$('ft').value;if(v==='')return;const p=S.get('plan',[]);if(p[v]){p[v].min=(p[v].min||0)+(+$('len').value);S.set('plan',p);pl()}}
-$('pp').onclick=()=>{const a=S.get('plan',[]).filter(x=>!x.done);if(!a.length){toast('Add tasks first.');return}const o=$('ppo');o.style.display='block';ai('Today is '+today+'. Make a realistic plan for today plus a short outlook for this week. Prioritise by deadline, put exams first, use 25-minute focus blocks with breaks, and weave in these daily wellness habits at sensible times: '+habTxt()+'. Tasks:\n'+a.map(x=>x.k+': '+x.t+' (due '+(x.d||'no date')+')').join('\n'),$('ppo'),TUT)};
-pl();{const d=S.get('plan',[]).filter(x=>!x.done&&dd(x)!=null&&dd(x)<=1);if(d.length)setTimeout(()=>toast('Due soon: '+d.map(x=>x.t).join(', ')),800)}
-// exam
-const Q=[['Time complexity of binary search?',['O(n)','O(log n)','O(n²)'],1],['Which is a LIFO structure?',['Queue','Stack','Array'],1],['P(heads) for a fair coin?',['0.25','0.5','1'],1],['NAND is universal?',['Yes','No','Only with NOT'],0],['Ohm\'s law is…',['V=IR','V=I/R','V=I+R'],0]];
-let tabs_=0,exA=S.get('exam',{a:{},t:600,on:false});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&exA.on){tabs_++;toast('Tab switch noted ('+tabs_+'). Stay on this page during the test.')}});
 function exr(){if(!exA.on){$('ex').innerHTML=`<p class="sm">5 questions · 10 minutes${Object.keys(exA.a).length?' · saved attempt found':''}</p><button id="exs">${Object.keys(exA.a).length?'Resume test':'Start mock test'}</button>`;$('exs').onclick=()=>{exA.on=true;S.set('exam',exA);exr();exT()};return}
 $('ex').innerHTML=`<p><b id="ext">${fmt(exA.t)}</b> left · <span class="sm">auto-saved ✔ ${navigator.onLine?'(online)':'(offline — will sync)'}</span></p>`+Q.map((q,i)=>`<p><b>${i+1}. ${q[0]}</b></p>`+q[1].map((o,j)=>`<label style="display:block"><input type="radio" style="width:auto" name="q${i}" data-q="${i}" value="${j}" ${exA.a[i]==j?'checked':''}> ${o}</label>`).join('')).join('')+`<div class="row" style="margin-top:8px"><button id="exf">Submit</button><button class="s" id="exr2">Retry / reconnect</button></div><p id="exo"></p>`;
 $('exf').onclick=()=>{let s=0;Q.forEach((q,i)=>{if(exA.a[i]==q[2])s++});clearInterval(exI);exA={a:{},t:600,on:false};S.set('exam',exA);exr();$('ex').insertAdjacentHTML('afterbegin',`<div class="m b">Score: <b>${s}/${Q.length}</b>. Tab switches noted: ${tabs_}. Review weak topics with the AI Tutor.</div>`)};
 $('exr2').onclick=()=>{$('exo').textContent=navigator.onLine?'✔ Connected. Your answers are safe and the timer continued.':'Still offline. Keep going — answers are saved and will sync on reconnect.'}}
-let exI;function exT(){clearInterval(exI);exI=setInterval(()=>{exA.t--;S.set('exam',exA);const e=$('ext');if(e)e.textContent=fmt(exA.t);if(exA.t<=0){clearInterval(exI);$('exf')&&$('exf').click()}},1000)}
-$('ex').onchange=e=>{if(e.target.dataset.q!=null){exA.a[e.target.dataset.q]=e.target.value;S.set('exam',exA)}};
-exr();if(exA.on)exT();
-// community
-const G=[['Data Structures — Batch 2026','Class group'],['Women in Tech','Virtual club'],['Late-night Learners','Study club'],['Photography Club','Virtual club']];
-const jg=S.get('groups',[]);function gr(){$('grp').innerHTML=G.map((g,i)=>`<div class="li"><span>${g[0]}<div class="sm">${g[1]}</div></span><button class="${jg.includes(i)?'':'s'}" data-g="${i}">${jg.includes(i)?'Joined':'Join'}</button></div>`).join('')}
-$('grp').onclick=e=>{const i=e.target.dataset.g;if(i==null)return;const k=jg.indexOf(+i);k<0?jg.push(+i):jg.splice(k,1);S.set('groups',jg);gr()};gr();
-function rj(){$('rj').href='https://meet.jit.si/'+encodeURIComponent($('room').value.replace(/\s+/g,'-'))}$('room').oninput=rj;rj();
-document.querySelector('.mood').onclick=e=>{const m=e.target.dataset.m;if(!m)return;const d=S.get('moods',{});d[today]=m;S.set('moods',d);$('mo').textContent='Logged '+m+' for today.'+((m==='😟'||m==='😢')?' You are not alone. Consider talking to a friend or counsellor.':'');ins()};
-// career: resume builder
-const RF=['rtp','rrl','rn','re','rk','rsu','red','rs1','rx','rce','rjd'],RS='You are an expert resume writer and ATS specialist for students and freshers in India. Be concrete and honest: never invent facts or numbers (use [x] placeholders) and keep it concise.';
-{const v=S.get('res',{});RF.forEach(k=>{if(v[k]!=null)$(k).value=v[k]})}
-const rv=k=>$(k).value.trim(),lines=t=>t.split('\n').map(x=>x.replace(/^[\s•\-*·]+/,'').trim()).filter(Boolean);
+function exT(){clearInterval(exI);exI=setInterval(()=>{exA.t--;S.set('exam',exA);const e=$('ext');if(e)e.textContent=fmt(exA.t);if(exA.t<=0){clearInterval(exI);$('exf')&&$('exf').click()}},1000)}
+function gr(){$('grp').innerHTML=G.map((g,i)=>`<div class="li"><span>${g[0]}<div class="sm">${g[1]}</div></span><button class="${jg.includes(i)?'':'s'}" data-g="${i}">${jg.includes(i)?'Joined':'Join'}</button></div>`).join('')}
+function rj(){$('rj').href='https://meet.jit.si/'+encodeURIComponent($('room').value.replace(/\s+/g,'-'))}
 function rtxt(){return[rv('rn'),[rv('re'),rv('rk')].filter(Boolean).join(' | '),rv('rrl')&&'Target: '+rv('rrl'),rv('rsu')&&'SUMMARY\n'+rv('rsu'),rv('red')&&'EDUCATION\n'+rv('red'),rv('rs1')&&'SKILLS\n'+rv('rs1'),rv('rx')&&'PROJECTS / EXPERIENCE\n'+lines($('rx').value).map(x=>'- '+x).join('\n'),rv('rce')&&'CERTIFICATIONS\n'+rv('rce')].filter(Boolean).join('\n\n')}
 function rp(){const h=x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;'),sec=(t,b)=>b?`<h4>${t}</h4>${b}`:'',sk=rv('rs1').split(',').map(x=>x.trim()).filter(Boolean);$('rp').className='card rpv t-'+$('rtp').value;
 $('rp').innerHTML=`<h2>${h(rv('rn')||'Your Name')}</h2>${rv('rrl')?`<div class="hl">${h(rv('rrl'))}</div>`:''}<div class="ct">${h([rv('re'),rv('rk')].filter(Boolean).join(' · ')||'email · phone · links')}</div>`+sec('Summary',rv('rsu')&&`<p>${h(rv('rsu'))}</p>`)+sec('Education',rv('red')&&`<p style="white-space:pre-wrap">${h(rv('red'))}</p>`)+sec('Skills',sk.length&&`<p>${sk.map(h).join(' · ')}</p>`)+sec('Projects & Experience',rv('rx')&&`<ul>${lines($('rx').value).map(x=>`<li>${h(x)}</li>`).join('')}</ul>`)+sec('Certifications',rv('rce')&&`<p style="white-space:pre-wrap">${h(rv('rce'))}</p>`)}
-RF.forEach(k=>$(k).oninput=$(k).onchange=()=>{const v={};RF.forEach(z=>v[z]=$(z).value);S.set('res',v);rp()});rp();
-const SWD=new Set('the and for with that this from your have will are our you who has can all any but not was were been into their they them than then also able per etc use using used work works working team role good strong must should including include looking join years year'.split(' '));
 function jdKw(){const w=(rv('rjd').toLowerCase().match(/[a-z][a-z+#.\-]{2,}/g)||[]).filter(x=>!SWD.has(x)),f={};w.forEach(x=>f[x]=(f[x]||0)+1);return Object.keys(f).sort((a,b)=>f[b]-f[a]).slice(0,25)}
 function atsr(){const t=rtxt().toLowerCase(),tips=[];let s=0;const ck=(ok,pts,tip)=>{if(ok)s+=pts;else tips.push(tip)},b=lines($('rx').value);
 ck(rv('rn'),8,'Add your full name.');ck(/@/.test(rv('re'))&&rv('re').replace(/\D/g,'').length>=8,10,'Add a professional email and phone number.');ck(/linkedin|github|portfolio|http/i.test(rv('rk')),8,'Add LinkedIn / GitHub links.');ck(rv('rsu').length>=120,12,'Write a 2-3 sentence summary (try ✨ Write summary).');ck(rv('red'),10,'Add your education.');ck(rv('rs1').split(',').filter(x=>x.trim()).length>=6,12,'List at least 6 relevant skills.');ck(b.length>=4,12,'Add at least 4 project or experience points.');ck(b.filter(x=>/\d/.test(x)).length>=2,10,'Quantify results with numbers (%, users, time saved).');ck(b.filter(x=>/^(built|developed|designed|created|led|implemented|improved|reduced|automated|analy[sz]ed|launched|managed|optimi[sz]ed)/i.test(x)).length>=2,8,'Start bullets with action verbs (Built, Led, Improved…).');
 let sc=Math.round(s/.9),kw='';if(rv('rjd')){const k=jdKw(),miss=k.filter(x=>!t.includes(x)),p=Math.round((k.length-miss.length)/Math.max(1,k.length)*100);kw='\n\nJob match: '+p+'% of key terms found.'+(miss.length?'\nMissing keywords: '+miss.slice(0,12).join(', '):'');sc=Math.round(sc*.7+p*.3)}
 return'ATS score: '+Math.min(100,sc)+'/100'+(tips.length?'\n\nImprove:\n'+tips.map(x=>'• '+x).join('\n'):'\n\nLooks strong!')+kw}
-let rT='',rK='';
 async function rai(k){const b=$('rao');b.style.display='block';$('rau').style.display='none';rK=k;const cx=rtxt()||'(empty)',role=rv('rrl')||'a fresher role',jd=rv('rjd').slice(0,2500);let p;
 if(k==='ats'){b.textContent=atsr();return}
 if(k==='sum')p='Write a 3-sentence ATS-friendly professional summary for a student applying as '+role+'. Use only facts in this resume; avoid clichés. Output ONLY the summary.\n\n'+cx;
@@ -594,42 +567,293 @@ else if(k==='ski')p='List 12 skills most relevant for '+role+' that fit this pro
 else if(k==='cl')p='Write a 170-word cover letter for '+role+(jd?' using this job description:\n'+jd:'')+'\nUse only facts from this resume; keep it warm and specific.\n\n'+cx;
 else{if(!jd){b.textContent='Paste a job description first.';return}b.textContent=atsr()+'\n\nTailoring with AI…';p='Compare this resume with the job description. Give: 1) 3 gaps, 2) 5 keywords to add naturally, 3) 3 rewritten bullets tailored to the JD (no invented facts). Be concise.\n\nJOB DESCRIPTION:\n'+jd+'\n\nRESUME:\n'+cx}
 try{const r=await sample(p,{sys:RS,onText:t=>{b.textContent=(k==='tai'?atsr()+'\n\n':'')+t.text}});rT=r.text.trim();if(k==='sum'||k==='bul'||k==='ski')$('rau').style.display='inline-block'}catch(e){b.textContent=aiErr(e)}}
-document.querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>rai(x.dataset.r));
-$('rau').onclick=()=>{if(rK==='sum')$('rsu').value=rT;else if(rK==='bul')$('rx').value=lines(rT).join('\n');else if(rK==='ski')$('rs1').value=[...new Set(((rv('rs1')?rv('rs1')+',':'')+rT).split(',').map(x=>x.trim()).filter(Boolean))].join(', ');$('rsu').oninput();$('rau').style.display='none';toast('Added to your resume')};
-$('rpr').onclick=()=>{const w=open('','_blank');if(!w){toast('Printing is not available here. Use Copy text and paste into Word or Docs.');return}w.document.write('<style>body{font-family:Arial;padding:30px;color:#111}h2{margin:0}h4{border-bottom:1px solid #999;margin:14px 0 4px;text-transform:uppercase;font-size:12px}.hl,.ct{color:#555;font-size:13px}ul{margin:4px 0;padding-left:18px}</style>'+$('rp').innerHTML);w.document.close();w.print()};
-$('rcp').onclick=async()=>{try{await navigator.clipboard.writeText(rtxt());toast('Resume text copied')}catch(e){toast('Could not copy')}};
-$('mq').onclick=async()=>{const b=$('mqo');b.style.display='block';await ai('Ask ONE interview question for this role: '+($('role').value||'fresher')+'. Output only the question.',b,TUT);$('ma').style.display=$('mf').style.display='block'};
-$('mf').onclick=()=>{const b=$('mfo');b.style.display='block';ai('Question: '+$('mqo').textContent+'\nCandidate answer: '+$('ma').value+'\nGive 3 strengths/improvements and a better sample answer, briefly.',b,TUT)};
-// profile
-$('pn').value=S.get('name','');$('pc').value=S.get('course','');if(S.get('name'))$('hi').textContent='Welcome back, '+S.get('name')+'!';
-$('ps').onclick=()=>{S.set('name',$('pn').value);S.set('course',$('pc').value);$('hi').textContent='Welcome back, '+($('pn').value||'')+'!';toast('Profile saved')};
-
-// ---- account, sync, youtube, co-working
-let DB=null,UID=null,UU=null,tmr,bun=null;
-const blob=()=>{const o={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k.startsWith('uc_'))o[k]=localStorage.getItem(k)}return o};
 function sync(){if(!DB||!UID)return;clearTimeout(tmr);tmr=setTimeout(()=>{const t=Date.now();DB.collection('data/users/'+UID).doc('state').set({b:JSON.stringify(blob()),t}).then(()=>{try{localStorage.setItem('ucT',t)}catch(e){}$('sv').textContent='Synced to your account'}).catch(()=>{})},1500)}
 async function login(manual){try{const d=await claude.use('db'),u=await claude.use('user');if(!d||!u){if(manual)toast('Sign in to Claude to save your data across devices.');return}
 DB=d;UU=u;UID=await u.id();const me=await u.me();$('lg').textContent=(me.name||'Saved').split(' ')[0]+' ✓';
 const s=await DB.collection('data/users/'+UID).doc('state').get();
 if(s.exists){const r=s.data();if(r.t>+(localStorage.getItem('ucT')||0)&&!sessionStorage.ucp){sessionStorage.ucp=1;const b=JSON.parse(r.b);Object.keys(b).forEach(k=>localStorage.setItem(k,b[k]));localStorage.setItem('ucT',r.t);location.reload();return}}else sync();
 $('bn').textContent='';board()}catch(e){if(manual)toast('Could not sign in right now.')}}
-$('lg').onclick=()=>login(true);login(false);
-
 function ytid(u){const m=u.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/);return m&&m[1]}
-$('yu').oninput=()=>{const i=ytid($('yu').value);$('yo').href=i?'https://www.youtube.com/watch?v='+i:'#'};
-$('ys').onclick=()=>{const t=$('yt').value.trim();if(t.length<80){toast('Paste the video transcript first (YouTube: ⋯ → Show transcript).');return}$('yso').style.display='block';ai('Summarise this video transcript for a student: a 2-line overview, 6 key points, key terms, and 3 quiz questions.\n\n'+t.slice(0,7000),$('yso'),TUT)};
 async function board(){if(!DB||bun)return;
 bun=DB.collection('community/posts').orderBy('ts','desc').limit(30).onSnapshot(async s=>{const ds=s.docs.map(d=>d.data()),ids=[...new Set(ds.map(d=>d.uid))];let ps={};try{ps=await UU.profiles(ids)}catch(e){}
 const nm=u=>(ps[u]&&ps[u].name)||'Someone',now=Date.now(),w=[...new Set(ds.filter(d=>d.k==='work'&&now-d.ts<72e5).map(d=>nm(d.uid)))];
 $('bw').textContent=w.length?'Working now: '+w.join(', '):'No one has checked in yet — be first.';
 $('bd').replaceChildren(...ds.map(d=>{const e=document.createElement('div');e.className='li';const a=document.createElement('span');a.textContent=nm(d.uid)+': '+d.t;const t=document.createElement('span');t.className='sm';t.textContent=new Date(d.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});e.append(a,t);return e}))},()=>{$('bn').textContent='Room unavailable right now.'})}
 async function bpost(k){if(!DB){toast('Sign in to join the room.');return}const t=$('bi').value.trim()||(k==='work'?'studying':'');if(!t)return;$('bi').value='';try{await DB.collection('community/posts').add({uid:UID,t:t.slice(0,200),k,ts:Date.now()})}catch(e){toast('Could not post. Try again.')}}
-$('bp').onclick=()=>bpost('post');$('bk').onclick=()=>bpost('work');$('bi').onkeydown=e=>{if(e.key==='Enter')bpost('post')};
-
-
-// ---- notebook (NotebookLM-style)
-const nb=()=>S.get('nb',[]);let AU=[];
-function nbr(){const a=nb();$('nbl').replaceChildren(...a.map((s,i)=>{const c=document.createElement('span');c.className='chip';c.textContent=s.title+' ✕';c.onclick=()=>{a.splice(i,1);S.set('nb',a);nbr()};return c}));$('nbc').textContent='· '+a.length+' source'+(a.length==1?'':'s')}nbr();
+function nbr(){const a=nb();$('nbl').replaceChildren(...a.map((s,i)=>{const c=document.createElement('span');c.className='chip';c.textContent=s.title+' ✕';c.onclick=()=>{a.splice(i,1);S.set('nb',a);nbr()};return c}));$('nbc').textContent='· '+a.length+' source'+(a.length==1?'':'s')}
+function hist(){const h=S.get('hist',{}),d=h[today]||{n:0,min:0};d.n++;d.min+=+$('len').value;h[today]=d;S.set('hist',h);ins()}
+function ins(){const h=S.get('hist',{}),m=S.get('moods',{}),box=$('ins');box.replaceChildren();let tot=0;for(let i=13;i>=0;i--){const dt=new Date(Date.now()-i*864e5).toISOString().slice(0,10),v=(h[dt]||{}).min||0;if(i<7)tot+=v;const c=document.createElement('div');c.style.cssText='flex:1;text-align:center';const b=document.createElement('div');b.style.cssText='height:70px;display:flex;align-items:flex-end';const f=document.createElement('div');f.style.cssText='width:100%;border-radius:4px 4px 0 0;background:var(--p);height:'+Math.min(100,v/1.2)+'%;min-height:'+(v?3:1)+'px;opacity:'+(v?1:.2);f.title=v+' min';b.append(f);const e=document.createElement('div');e.textContent=m[dt]||'·';const l=document.createElement('div');l.className='sm';l.style.fontSize='.7rem';l.textContent=dt.slice(8);c.append(b,e,l);box.append(c)}$('insum').textContent='Last 7 days: '+tot+' min focused'}
+function rrender(r){const o=$('rmo');o.replaceChildren();if(!r)return;const d=r.data,s=document.createElement('p');s.textContent=d.summary||'';o.append(s);
+(d.topics||[]).sort((a,b)=>b.weight-a.weight).forEach(t=>{const e=document.createElement('div');e.style.margin='10px 0';const l=document.createElement('div');l.className='row';l.style.justifyContent='space-between';const n=document.createElement('b');n.textContent=t.name;const w=document.createElement('span');w.className='sm';w.textContent=t.weight+'% · '+t.priority+(t.hours?' · '+t.hours+'h':'')+(t.pyq?' · '+t.pyq+' PYQs':'');l.append(n,w);const b=document.createElement('div');b.className='bar';const i=document.createElement('i');i.style.width=Math.min(100,t.weight*2.5)+'%';b.append(i);e.append(l,b);o.append(e)});
+const hd=document.createElement('h3');hd.textContent='Roadmap';o.append(hd);(d.roadmap||[]).forEach(x=>{const e=document.createElement('div');e.className='li';const a=document.createElement('span');a.textContent=x.focus;const b=document.createElement('span');b.className='sm';b.textContent=x.date;e.append(a,b);o.append(e)});$('rma').style.display='inline-block'}
+function att(){const a=S.get('att',[]),tg=+$('att_t').value||75;$('atl').replaceChildren(...a.map((x,i)=>{const p=x.t?x.a/x.t*100:100;let msg;if(p>=tg){const k=Math.floor(x.a/(tg/100)-x.t);msg=k>0?'You can miss '+k+' more '+(k==1?'class':'classes'):'Attend the next class to stay safe'}else{msg='Attend the next '+Math.ceil((tg/100*x.t-x.a)/(1-tg/100))+' classes in a row to reach '+tg+'%'}
+const e=document.createElement('div');e.className='li';e.style.display='block';if(i!==attNew)e.style.animation='none';const r=document.createElement('div');r.className='row';r.style.justifyContent='space-between';const n=document.createElement('b');n.textContent=x.s;const q=document.createElement('b');q.textContent=p.toFixed(0)+'%  ('+x.a+'/'+x.t+')';q.style.color=p<tg?'#c9605c':'var(--p)';r.append(n,q);const bar=document.createElement('div');bar.className='bar';const f=document.createElement('i');f.style.width=(attPrev[i]==null?0:attPrev[i])+'%';attPrev[i]=p;requestAnimationFrame(()=>requestAnimationFrame(()=>{f.style.width=p+'%'}));f.style.background=p<tg?'#c9605c':'';bar.append(f);const m=document.createElement('div');m.className='sm';m.textContent=msg;const bt=document.createElement('div');bt.className='row';bt.style.marginTop='6px';
+const mk=(l,fn,c)=>{const z=document.createElement('button');z.textContent=l;z.className=c||'s';z.onclick=()=>{const s=S.get('att',[]);fn(s[i]);S.set('att',s);att()};return z};
+const edit=document.createElement('button');edit.textContent='Edit';edit.className='s';edit.onclick=()=>{attEdit=attEdit===i?-1:i;att()};
+const rem=document.createElement('button');rem.textContent='Remove';rem.className='s';rem.onclick=()=>{e.style.height=e.offsetHeight+'px';void e.offsetHeight;e.classList.add('out');setTimeout(()=>{const s=S.get('att',[]);s.splice(i,1);S.set('att',s);attPrev.splice(i,1);attEdit=-1;att()},400)};
+bt.append(mk('Present',o=>{o.a++;o.t++;(o.l=o.l||[]).push(1)},''),mk('Absent',o=>{o.t++;(o.l=o.l||[]).push(0)}),kebab([['Undo last mark',()=>{const s=S.get('att',[]),o=s[i],z=(o.l||[]).pop();if(z===undefined){toast('Nothing to undo.');return}o.t--;if(z)o.a--;S.set('att',s);att()}],['Edit',()=>edit.onclick()],['Remove',()=>rem.onclick()]]));
+e.append(r,bar,m,bt);
+if(attEdit===i){const ed=document.createElement('div');ed.className='ed';const mi=(ph,v,t)=>{const z=document.createElement('input');z.type=t;z.placeholder=ph;z.value=v;z.setAttribute('aria-label',ph);if(t==='number')z.min=0;return z};const ni=mi('Subject',x.s,'text'),ai=mi('Attended',x.a,'number'),ti=mi('Total classes',x.t,'number');const sv=document.createElement('button');sv.textContent='Save';sv.onclick=()=>{const nm=ni.value.trim();let aa=Math.max(0,Math.floor(+ai.value||0)),tt=Math.max(0,Math.floor(+ti.value||0));if(!nm){toast('Subject name cannot be empty.');return}if(aa>tt){toast('Attended cannot be more than total classes.');return}const s=S.get('att',[]),o=s[i];if(o.a!==aa||o.t!==tt)o.l=[];o.s=nm;o.a=aa;o.t=tt;S.set('att',s);attEdit=-1;att();toast('Subject updated.')};const cn=document.createElement('button');cn.textContent='Cancel';cn.className='s';cn.onclick=()=>{attEdit=-1;att()};ed.append(ni,ai,ti,sv,cn);e.append(ed)}
+return e}));if(!a.length)$('atl').textContent='Add your subjects to start tracking.';attNew=-1}
+function applyUI(){const u=S.get('ui',{}),r=document.documentElement.style,fi=u.f||0,f=FN[fi];
+if(f[2]&&!document.getElementById('gf'+fi)&&navigator.onLine){const l=document.createElement('link');l.id='gf'+fi;l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family='+f[2]+'&display=swap';document.head.appendChild(l)}
+document.body.style.fontFamily=f[1];r.fontSize=(u.fs||16)+'px';document.body.style.fontSize='1rem';document.body.style.lineHeight=u.lh||1.5;
+let img='';try{img=localStorage.getItem('ucbg')||''}catch(e){}const g=S.get('wpg',''),w=$('wp'),dim=u.dim==null?.25:u.dim;
+document.body.classList.toggle('wp',!!(img||g));const bk=(img?'i'+img.length:'')+'|'+g;if(w._k!==bk){w._k=bk;w.style.backgroundImage=img?'url('+img+')':g}document.documentElement.style.setProperty('--dim',dim);document.documentElement.style.setProperty('--bl',(u.bl||0)+'px');
+$('cf').value=fi;$('fs').value=u.fs||16;$('fsv').textContent=u.fs||16;$('lh').value=u.lh||1.5;$('lhv').textContent=u.lh||1.5;$('dm').value=dim;$('bl').value=u.bl||0;$('cm').value=S.get('theme','')||'';applyExtra(u)}
+function confetti(n){n=n||26;const cs=['#8294c4','#c993a7','#cba078','#7db09b','#76a8bd'];for(let i=0;i<n;i++){const d=document.createElement('i');d.className='cf';d.style.cssText='left:'+(10+Math.random()*80)+'vw;background:'+cs[i%5]+';--x:'+((Math.random()-.5)*180)+'px;animation-delay:'+(Math.random()*.25)+'s';document.body.appendChild(d);setTimeout(()=>d.remove(),2000)}}
+function applyExtra(u){const d=document.documentElement;d.style.setProperty('--rd',(u.rd||18)+'px');if(u.dn)d.dataset.dn=u.dn;else delete d.dataset.dn;d.dataset.mo=u.mo||'gentle';d.dataset.gl=u.gl===0?'0':'1';d.dataset.gs=u.gs||'';d.style.setProperty('--wm',u.wm||0);$('wmt').style.display=u.wm>0?'block':'none';
+$('rd2').value=u.rd||18;$('gs').value=u.gs||'';$('dn').value=u.dn||'';$('anim').value=u.mo||'gentle';$('gl').checked=u.gl!==0;$('wm').value=u.wm||0;$('sn').checked=u.sn!==0;$('svol').value=u.sv||.7;$('snd').classList.toggle('off',u.sn===0);
+document.querySelectorAll('.sw2').forEach(b=>b.classList.toggle('on',(b.dataset.k||'')===(u.ac||'')));applyAcc()}
+function tick(f,v){const u=S.get('ui',{});if(u.sn===0)return;try{AC_=AC_||new (window.AudioContext||window.webkitAudioContext)();if(AC_.state==='suspended')AC_.resume();const t=AC_.currentTime,o=AC_.createOscillator(),g=AC_.createGain(),vol=(v==null?(u.sv||.7):v)*.45;o.type='sine';o.frequency.setValueAtTime(f||460,t);o.frequency.exponentialRampToValueAtTime((f||460)*.62,t+.07);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(vol,.0002),t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+.11);o.connect(g);g.connect(AC_.destination);o.start(t);o.stop(t+.12)}catch(e){}}
+function kclose(){document.querySelectorAll('.mn.on').forEach(x=>x.remove())}
+function kebab(items){const w=document.createElement('span');w.className='kb';const b=document.createElement('button');b.className='s kbb';b.textContent='⋮';b.setAttribute('aria-label','More options');
+b.onclick=ev=>{ev.stopPropagation();const had=b.dataset.o;kclose();document.querySelectorAll('.kbb').forEach(x=>delete x.dataset.o);if(had)return;b.dataset.o=1;const m=document.createElement('div');m.className='mn on';(typeof items==='function'?items():items).forEach(([l,f])=>{const z=document.createElement('button');z.className='s';z.textContent=l;z.onclick=e2=>{e2.stopPropagation();kclose();delete b.dataset.o;f()};m.append(z)});
+m.style.cssText='position:fixed;visibility:hidden;top:0;right:0';document.body.append(m);const r=b.getBoundingClientRect(),h=m.offsetHeight,vh=innerHeight;let t=r.bottom+6;if(t+h>vh-110)t=r.top-h-6;t=Math.max(70,Math.min(t,vh-h-10));m.style.cssText='position:fixed;z-index:80;top:'+t+'px;right:'+Math.max(8,innerWidth-r.right)+'px'};w.append(b);return w}
+function hr(){const a=S.get('hab',[]).slice().sort((x,y)=>(x.m||'99').localeCompare(y.m||'99')),dd_=hdn(),now=new Date().toTimeString().slice(0,5),nd=a.filter(h=>dd_.includes(h.id)).length;
+$('agp').textContent=a.length?nd+' of '+a.length+' done today · '+Object.keys(HC).map(k=>{const t=a.filter(h=>h.c===k);return t.length?HC[k]+' '+t.filter(h=>dd_.includes(h.id)).length+'/'+t.length:''}).filter(Boolean).join('  '):'Add habits for your mind and body below.';$('agbar').style.width=(a.length?nd/a.length*100:0)+'%';
+$('agl').replaceChildren(...a.map(h=>{const e=document.createElement('div');e.className='li';e.style.flexWrap='wrap';const c=document.createElement('input');c.type='checkbox';c.checked=dd_.includes(h.id);c.onchange=()=>{const d=S.get('habd',{}),l=d[today]||[];d[today]=c.checked?[...new Set([...l,h.id])]:l.filter(x=>x!==h.id);S.set('habd',d);if(c.checked)confetti(14);hr()};
+const t=document.createElement('div');t.className='grow';const b=document.createElement('div');b.textContent=h.t;if(c.checked)b.style.textDecoration='line-through';const m=document.createElement('div');m.className='sm';m.textContent=HC[h.c]+' '+h.c[0].toUpperCase()+h.c.slice(1)+(h.m?' · '+h.m:'');if(h.m&&h.m<=now&&!c.checked)m.style.color='#d97706';t.append(b,m);
+e.append(c,t,kebab([['Edit',()=>{hEd=hEd===h.id?null:h.id;hr()}],['Remove',()=>{S.set('hab',S.get('hab',[]).filter(x=>x.id!==h.id));hr()}]]));
+if(hEd===h.id){const ed=document.createElement('div');ed.className='ed';ed.style.width='100%';const ti=document.createElement('input');ti.value=h.t;const ci=document.createElement('select');Object.keys(HC).forEach(k=>ci.add(new Option(HC[k]+' '+k,k)));ci.value=h.c;const mi=document.createElement('input');mi.type='time';mi.value=h.m||'';const sv=document.createElement('button');sv.textContent='Save';sv.onclick=()=>{if(!ti.value.trim()){toast('Name cannot be empty.');return}const s=S.get('hab',[]),o=s.find(x=>x.id===h.id);o.t=ti.value.trim();o.c=ci.value;o.m=mi.value;S.set('hab',s);hEd=null;hr()};ed.append(ti,ci,mi,sv);e.append(ed)}return e}));
+const have=new Set(a.map(h=>h.t));$('agq').replaceChildren(...HS.filter(x=>!have.has(x[0])).slice(0,6).map(x=>{const c=document.createElement('span');c.className='chip';c.textContent='+ '+x[0];c.onclick=()=>{const s=S.get('hab',[]);s.push({id:hid(),t:x[0],c:x[1],m:''});S.set('hab',s);hr()};return c}))}
+function csel(sel){sel.style.display='none';const b=document.createElement('button');b.type='button';b.className='s csb';b.setAttribute('aria-haspopup','listbox');sel.after(b);
+const lab=()=>{const o=sel.options[sel.selectedIndex];b.replaceChildren(Object.assign(document.createElement('span'),{textContent:o?o.text:''}),Object.assign(document.createElement('span'),{textContent:'▾',className:'cv'}))};
+sel.csync=lab;lab();new MutationObserver(lab).observe(sel,{childList:true});sel.addEventListener('change',lab);
+b.onclick=ev=>{ev.stopPropagation();const had=b.dataset.o;kclose();document.querySelectorAll('.kbb,.csb').forEach(x=>delete x.dataset.o);if(had)return;b.dataset.o=1;const m=document.createElement('div');m.className='mn on';
+[...sel.options].forEach(o=>{const z=document.createElement('button');z.className='s'+(o.value===sel.value?' act':'');z.textContent=o.text;z.onclick=e2=>{e2.stopPropagation();kclose();delete b.dataset.o;sel.value=o.value;sel.dispatchEvent(new Event('change'));lab()};m.append(z)});
+m.style.cssText='position:fixed;visibility:hidden;top:0;left:0';document.body.append(m);const r=b.getBoundingClientRect(),h=m.offsetHeight,vh=innerHeight,w=Math.max(r.width,170);let t=r.bottom+6;if(t+h>vh-110)t=r.top-h-6;m.style.cssText='position:fixed;z-index:80;min-width:'+w+'px;max-width:calc(100vw - 16px);max-height:'+(vh-190)+'px;overflow:auto;top:'+Math.max(70,Math.min(t,vh-h-10))+'px;left:'+Math.max(8,Math.min(r.left,innerWidth-w-8))+'px'};}
+function hpush(){if(!HI)return;const s=history.state;if(s&&!s.o&&s.g===curG&&s.s===curS[curG])return;try{history.pushState({g:curG,s:curS[curG]},'')}catch(e){}}
+function hopen(o){if(!HI)return;try{history.pushState({o:o,g:curG,s:curS[curG]},'')}catch(e){}}
+function yhide(){document.body.classList.remove('yfs')}
+function yfs(){document.body.classList.add('yfs');hopen('yfs')}
+function yq(){if(history.state&&history.state.o==='yfs')history.back();else yhide()}
+function vlr(){const src=[],pp=S.get('plan',[]);if(cL!=null){const l=lx().find(x=>x.id===cL);l&&src.push([l.title,'the lecture you are watching'])}
+const v=$('ft').value;if(v!==''&&pp[v])src.push([pp[v].t,'your focus task']);
+const lc=lx().filter(l=>!l.done&&(l.pos>0||l.pct>0)).pop();lc&&src.push([lc.title,'your last lecture']);
+const ex=pp.filter(x=>!x.done).sort((a,b)=>(a.d||'9').localeCompare(b.d||'9'))[0];ex&&src.push([ex.t,'your next deadline']);
+const r=S.get('road',null);r&&r.sub&&src.push([r.sub,'your exam roadmap']);nb().slice(-2).forEach(s=>src.push([s.title,'your notebook']));
+let best=[],why='';for(const [t,w] of src){const m=LABS.filter(L=>L[1].test(t));if(m.length){best=m.slice(0,3);why='Because of '+w+': “'+t+'”';break}}
+$('vlw').textContent=best.length?why:(src.length?'No exact lab for “'+src[0][0]+'” yet. Try these popular ones.':'Start a lecture or pick a focus task and a matching lab shows up here.');
+if(!best.length)best=[LABS[0],LABS[2],LABS[4]];
+$('vls').replaceChildren(...best.map(L=>{const e=document.createElement('div');e.className='li';const t=document.createElement('span');t.className='grow';t.innerHTML='<b></b><div class="sm"></div>';t.firstChild.textContent=L[0];t.lastChild.textContent=L[3];const a=document.createElement('a');a.className='btn s';a.target='_blank';a.rel='noopener';a.href=L[2];a.textContent='Open';e.append(t,a);return e}))}
+async function nhttp(url,o){o=o||{};const method=o.method||'GET',headers=o.headers||{};
+if(NATIVE()){const r=await Capacitor.nativePromise('CapacitorHttp','request',{url,method,headers,data:o.data,responseType:'text',connectTimeout:15000,readTimeout:25000});return{status:r.status,data:r.data}}
+const r=await fetch(url,{method,headers,body:o.data==null?undefined:(typeof o.data==='string'?o.data:JSON.stringify(o.data))});return{status:r.status,data:await r.text()}}
+function dec(s){return s.replace(/&#x([0-9a-f]+);/gi,(m,n)=>String.fromCodePoint(parseInt(n,16))).replace(/&#(\d+);/g,(m,n)=>String.fromCodePoint(+n)).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,'&')}
+function ytid2(u){u=String(u||'').trim();const m=u.match(/(?:v=|youtu\.be\/|shorts\/|live\/|embed\/)([\w-]{11})/);return m?m[1]:(/^[\w-]{11}$/.test(u)?u:null)}
+async function ytPlayer(id){
+const tries=[{ctx:{clientName:'ANDROID',clientVersion:'20.10.38',androidSdkVersion:30,hl:'en',gl:'US'},ua:UA_AND,cn:'3'},
+{ctx:{clientName:'IOS',clientVersion:'20.10.4',deviceMake:'Apple',deviceModel:'iPhone16,2',osName:'iPhone',osVersion:'18.3.2.22D82',hl:'en',gl:'US'},ua:'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)',cn:'5'}];
+for(const t of tries){try{const r=await nhttp('https://www.youtube.com/youtubei/v1/player?prettyPrint=false',{method:'POST',headers:{'Content-Type':'application/json','User-Agent':t.ua,'X-YouTube-Client-Name':t.cn,'X-YouTube-Client-Version':t.ctx.clientVersion,'Accept-Language':'en-US,en;q=0.9'},data:{context:{client:t.ctx},videoId:id,contentCheckOk:true,racyCheckOk:true}});const j=asObj(r.data);if(j&&j.videoDetails&&j.captions)return j;if(j&&j.videoDetails&&!tries.fallback)tries.fallback=j}catch(e){}}
+try{const r=await nhttp('https://www.youtube.com/watch?v='+id+'&hl=en',{headers:{'Accept-Language':'en-US,en;q=0.9',Cookie:'CONSENT=YES+1; SOCS=CAI'}});const h=asText(r.data),m=h.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;(?:\s*var\s|\s*<\/script>)/s);if(m){const j=JSON.parse(m[1]);if(j&&j.videoDetails)return j}}catch(e){}
+return tries.fallback||null}
+function pickTrack(tr){const f=g=>tr.find(g);return f(t=>/^en/.test(t.languageCode)&&t.kind!=='asr')||f(t=>/^en/.test(t.languageCode))||f(t=>/^hi/.test(t.languageCode)&&t.kind!=='asr')||f(t=>/^hi/.test(t.languageCode))||f(t=>t.kind!=='asr')||tr[0]}
+function parseCaps(body){const o=asObj(body);let t='';
+if(o&&Array.isArray(o.events))t=o.events.filter(e=>e.segs).map(e=>e.segs.map(s=>s.utf8||'').join('')).join(' ');
+else{const x=asText(body);if(/<(text|p)\b/.test(x)){const out=[];x.replace(/<(?:text|p)\b[^>]*>([\s\S]*?)<\/(?:text|p)>/g,(m,s)=>{out.push(dec(s.replace(/<[^>]+>/g,'')))});t=out.join(' ')}}
+return t.replace(/\[(?:music|applause|laughter|sangeet|संगीत)[^\]]*\]/gi,' ').replace(/\s+/g,' ').trim()}
+async function ytTranscript(id){try{
+const pr=await ytPlayer(id);if(!pr)throw new Error('yt-player');
+const title=(pr.videoDetails&&pr.videoDetails.title)||'';
+const tr=pr.captions&&pr.captions.playerCaptionsTracklistRenderer&&pr.captions.playerCaptionsTracklistRenderer.captionTracks;
+if(!tr||!tr.length){const st=pr.playabilityStatus&&pr.playabilityStatus.status;throw new Error(st==='LOGIN_REQUIRED'?'yt-login':'yt-nocaps')}
+const t=pickTrack(tr),u=t.baseUrl.replace(/&fmt=[^&]*/,'');let text='';
+for(const f of ['&fmt=json3','']){const r=await nhttp(u+f,{headers:{'Accept-Language':'en-US,en;q=0.9','User-Agent':UA_AND}});text=parseCaps(r.data);if(text)break}
+if(!text)throw new Error('yt-empty');
+return{title,text,lang:t.languageCode,auto:t.kind==='asr'}}catch(e){e.yt=true;throw e}}
+async function ytSummarise(text,title,box){
+const clip=text.slice(0,84000),head=title?'Video title: '+title+'\n':'',FINAL='Summarise this video for a student: a 2-line overview, 6 key points, key terms, and 3 quiz questions.';
+if(clip.length<=7000){box.textContent='Summarising…';return (await sample(FINAL+'\n\n'+head+'Transcript:\n'+clip,{sys:YS,onText:t=>{box.textContent=t.text}})).text}
+const size=Math.max(6500,Math.ceil(clip.length/12)),parts=[];for(let i=0;i<clip.length;i+=size)parts.push(clip.slice(i,i+size));
+const notes=[];for(let i=0;i<parts.length;i++){box.textContent='Reading the video… part '+(i+1)+' of '+parts.length;
+const r=await retry(()=>sample('This is part '+(i+1)+' of '+parts.length+' of a lecture video transcript'+(title?' titled "'+title+'"':'')+'. Write compact study notes (max 110 words): main ideas, definitions, formulas, examples. No intro.\n\n'+parts[i],{sys:YS}),1);notes.push('Part '+(i+1)+': '+r.text.trim())}
+box.textContent='Writing the final summary…';
+return (await sample(FINAL+'\n\n'+head+'Notes covering the whole video, in order:\n'+notes.join('\n').slice(0,8200),{sys:YS,onText:t=>{box.textContent=t.text}})).text}
+function ytErr(e){const m=e&&e.message;
+if(m==='yt-nocaps')return 'This video has no captions, so it cannot be summarised automatically. Try another video, or paste the transcript below.';
+if(m==='yt-login')return 'YouTube wants a sign-in for this video (private or age-restricted). Paste its transcript below instead.';
+return 'Could not fetch the transcript automatically (no internet, or YouTube is blocking it right now). On YouTube tap ⋯ → Show transcript → copy, then paste it below.'}
+function imgCanvas(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const s=Math.min(1,2000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c)};im.onerror=()=>{URL.revokeObjectURL(u);no(new Error('img'))};im.src=u})}
+async function ocrCanvases(cvs,say){await upLoad(CDN.ocr);const w=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')say('Reading text from the image… '+Math.round(m.progress*100)+'%')}});try{const out=[];for(const c of cvs){out.push((await w.recognize(c)).data.text)}return out.join('\n')}finally{try{await w.terminate()}catch(e){}}}
+async function pdfText(file,say){await upLoad(CDN.pdf);pdfjsLib.GlobalWorkerOptions.workerSrc=CDN.pdfw;const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise,n=Math.min(doc.numPages,60),out=[];
+for(let i=1;i<=n;i++){say('Reading PDF… page '+i+' of '+n);const p=await doc.getPage(i),tc=await p.getTextContent();let s='';tc.items.forEach(it=>{s+=it.str+(it.hasEOL?'\n':' ')});out.push(s)}
+let text=out.join('\n\n'),note=doc.numPages>n?' (first '+n+' pages)':'';
+if(text.replace(/\s+/g,'').length<60){const m=Math.min(doc.numPages,8),cv=[];for(let i=1;i<=m;i++){say('Scanned PDF — preparing page '+i+' of '+m);const p=await doc.getPage(i),vp=p.getViewport({scale:2}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;await p.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;cv.push(c)}text=await ocrCanvases(cv,say);note=' (scanned, OCR on first '+m+' pages)'}
+return{text,note}}
+async function docxText(file){await upLoad(CDN.zip);const z=await JSZip.loadAsync(await file.arrayBuffer()),f=z.file('word/document.xml');if(!f)throw new Error('docx');const x=await f.async('string');return dec(x.replace(/<w:tab\/>/g,'\t').replace(/<\/w:p>/g,'\n').replace(/<w:br[^>]*\/>/g,'\n').replace(/<[^>]+>/g,''))}
+async function extractFile(file,say){const n=file.name.toLowerCase(),ext=(n.match(/\.([a-z0-9]+)$/)||[])[1]||'',ty=file.type||'';let text='',note='';
+if(file.size>20*1048576)throw new Error('big');
+if(ext==='pdf'||ty==='application/pdf'){const r=await pdfText(file,say);text=r.text;note=r.note}
+else if(ext==='docx'){text=await docxText(file)}
+else if(/^image\//.test(ty)||/^(png|jpe?g|webp|bmp|gif)$/.test(ext)){say('Preparing image…');text=await ocrCanvases([await imgCanvas(file)],say);note=' (read from image)'}
+else if(/^(txt|md|csv|tsv|json|text)$/.test(ext)||/^text\//.test(ty)){text=await file.text()}
+else throw new Error('type');
+text=text.replace(/\r/g,'').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+if(text.length<10)throw new Error('empty');return{text,note}}
+async function condense(text,kind,limit,say){
+const run=async(t,depth)=>{if(t.length<=limit||depth>1)return t.slice(0,limit);
+const clip=t.slice(0,70000),size=Math.max(6000,Math.ceil(clip.length/10)),parts=[];for(let i=0;i<clip.length;i+=size)parts.push(clip.slice(i,i+size));
+const outs=[];for(let i=0;i<parts.length;i++){say('Scanning your '+(kind==='pyq'?'question paper':'syllabus')+'… part '+(i+1)+' of '+parts.length);
+const p=kind==='pyq'?'From this past-paper text, list every exam question as one short line (keep marks and year if shown), grouped under the topic it belongs to. Compact, no commentary.\n\n':'From this syllabus text, list every unit and its topics as compact lines like "Unit 2: topic, topic, topic". Keep the original names. No commentary.\n\n';
+outs.push((await retry(()=>sample(p+parts[i],{sys:YS}),1)).text.trim())}
+return run(outs.join('\n'),depth+1)};
+return run(text,0)}
+</script>
+<script type="text/plain" data-app>
+const $=id=>document.getElementById(id);
+const S={get(k,d){try{const v=(k in window.__MEM)?window.__MEM[k]:localStorage.getItem('uc_'+k);if(!v)return d;const x=JSON.parse(v);if(d===undefined)return x===null?d:x;if(x===null||typeof x!==typeof d||Array.isArray(x)!==Array.isArray(d))return d;if(Array.isArray(x))return x.filter(i=>i!=null);if(typeof x==='object')return{...d,...x};return x}catch(e){return d}},
+set(k,v){let s;try{s=JSON.stringify(v)}catch(e){return false}
+let ok=true;try{localStorage.setItem('uc_'+k,s);delete window.__MEM[k]}catch(e){ok=false;window.__MEM[k]=s;try{window.__quota()}catch(x){}}
+try{window.__idbPut('uc_'+k,s,ok)}catch(e){}
+try{sync()}catch(e){}return ok}};
+const IC={home:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',study:'<path d="M4 5a2 2 0 012-2h13v15H6a2 2 0 00-2 2zM4 20a2 2 0 002 1h13"/>',planner:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',connect:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5 0 4 2 4 5"/>',profile:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>'};
+const NV=[['home',['home'],'Today'],['study',['classes','doubts'],'Study'],['planner',['planner','agenda'],'Plan'],['connect',['community','career'],'Connect'],['profile',['profile'],'Me']];
+const THM={light:['Light'],dark:['Dark'],forest:['Forest Mist 🌿',['#4f8a6e','#7fb59b']],ocean:['Ocean Calm 🌊',['#4a8fb0','#7bb6cf']],lavender:['Lavender Dusk 💜',['#8071c0','#a99bd8']],sand:['Warm Sand 🏜️',['#b98a5e','#d4b088']],rose:['Rose Quartz 🌸',['#c0788f','#dfa8ba']],midnight:['Midnight Calm 🌙',['#5b7cc9','#7f9fe2']],moss:['Moss Night 🍃',['#3f9a7c','#6cc4a4']]};
+let curG='home';
+const ACC={home:['#6273ab','#8294c4'],study:['#4f819a','#76a8bd'],planner:['#a97a52','#cba078'],connect:['#a96a7f','#c993a7'],profile:['#528a76','#7db09b']};
+const SUB={planner:'Academic',agenda:'Agenda',classes:'Lectures & labs',doubts:'Notebook & AI',community:'Community',career:'Career'};
+let curS={};
+$('nv').innerHTML=NV.map(g=>`<button data-t="${g[0]}" aria-label="${g[2]}"><svg viewBox="0 0 24 24">${IC[g[0]]}</svg><small>${g[2]}</small></button>`).join('');
+$('nv').onclick=e=>{const b=e.target.closest('button');if(b)go(b.dataset.t)};
+go('home');
+let toastT,toastT2;
+</script>
+<script type="text/plain" data-app>
+const ACS={sage:['Sage',['#528a76','#7db09b']],sky:['Sky',['#4f819a','#76a8bd']],indigo:['Indigo',['#6273ab','#8294c4']],lilac:['Lilac',['#7b6ca8','#a396c9']],sand:['Sand',['#a97a52','#cba078']],rose:['Rose',['#a96a7f','#c993a7']],slate:['Slate',['#5f6e80','#8796a8']]};
+$('thm').onclick=()=>{const ks=Object.keys(THM),c=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');setTheme(ks[(ks.indexOf(c)+1)%ks.length])};
+if(S.get('theme'))document.documentElement.dataset.theme=S.get('theme');
+addEventListener('online',()=>{net();toast('Back online — progress synced ✔')});
+addEventListener('offline',()=>{net();toast('You are offline. Everything is saved on this device.')});
+net();
+</script>
+<script type="text/plain" data-app>
+$('ld').checked=S.get('ld',false);
+const applyLD=()=>document.body.classList.toggle('lowdata',$('ld').checked);
+applyLD();
+$('ld').onchange=()=>{S.set('ld',$('ld').checked);applyLD()};
+</script>
+<script type="text/plain" data-app>
+const today=new Date().toISOString().slice(0,10);
+let dn=S.get('day',{d:today,n:0});
+if(dn.d!==today)dn={d:today,n:0};
+stats();
+</script>
+<script type="text/plain" data-app>
+let left=25*60,running=false,tm,el=0,mode='f',endAt=0,PA=null;
+const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+const pom=S.get('pom',{len:25,br:5,auto:true,next:false});
+$('len').value=pom.len||25;
+$('brk').value=pom.br||5;
+$('arest').checked=pom.auto!==false;
+$('anext').checked=!!pom.next;
+const sp=()=>S.set('pom',{len:+$('len').value,br:+$('brk').value||5,auto:$('arest').checked,next:$('anext').checked});
+const dur=()=>(mode==='f'?+$('len').value:(+$('brk').value||5))*60;
+$('len').onchange=()=>{sp();if(!running&&mode==='f'){left=dur();show()}};
+$('brk').onchange=$('arest').onchange=$('anext').onchange=sp;
+$('st').onclick=()=>{if(running){clearInterval(tm);running=false;$('st').textContent='Resume';show()}else start()};
+$('rs').onclick=()=>{clearInterval(tm);running=false;el=0;mode='f';left=dur();$('st').textContent='Start';show()};
+left=dur();
+show();
+</script>
+<script type="text/plain" data-app>
+const lx=()=>S.get('lx',[]);
+let lxE=null,YP=null,YR=null,cL=null,yT=null;
+const tfmt=s=>{s=Math.max(0,Math.floor(s||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s%60).padStart(2,'0')};
+const lpc=l=>l.done?100:l.dur?Math.min(100,Math.round((l.pos||0)/l.dur*100)):(l.pct||0);
+$('lxa').onclick=async()=>{const v=ytid($('lxu').value);if(!v){toast('Paste a valid YouTube link.');return}let t=$('lxn').value.trim();const a=lx();if(!t){try{const c=new AbortController();setTimeout(()=>c.abort(),4000);const r=await fetch('https://noembed.com/embed?url='+encodeURIComponent('https://www.youtube.com/watch?v='+v),{signal:c.signal});t=(await r.json()).title||''}catch(e){}}a.push({id:Date.now().toString(36),title:t||'Lecture '+(a.length+1),vid:v,pos:0,dur:0,pct:0,done:0});S.set('lx',a);$('lxu').value=$('lxn').value='';lecs();toast('Lecture added')};
+$('lxu').onkeydown=e=>{if(e.key==='Enter')$('lxa').click()};
+$('lpx').onclick=lclose;
+document.addEventListener('visibilitychange',()=>{if(document.hidden)lsave(0)});
+addEventListener('pagehide',()=>lsave(0));
+lecs();
+</script>
+<script type="text/plain" data-app>
+$('V').oninput=$('R').oninput=lab;
+lab();
+</script>
+<script type="text/plain" data-app>
+let CS=null;
+(async()=>{try{CS=await claude.use('sample')}catch(e){}})();
+const AID={m:'cloud',pv:'poll',model:'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',url:'',cm:''};
+const AIC=()=>({...AID,...S.get('aic',{}),key:localStorage.getItem('ucaik')||''});
+let WL=null,WLid='';
+const PRE={groq:{url:'https://api.groq.com/openai/v1',model:'llama-3.3-70b-versatile',key:1,link:'https://console.groq.com/keys'},openrouter:{url:'https://openrouter.ai/api/v1',model:'meta-llama/llama-3.3-70b-instruct:free',key:1,link:'https://openrouter.ai/keys'},poll:{url:'https://text.pollinations.ai/openai',model:'openai',key:0}};
+sample.json=async(p,o)=>{const r=await sample(p+'\nReturn valid JSON only, no extra text.',o),m=r.text.match(/[\[{][\s\S]*[\]}]/);if(!m)throw new Error('json');let j=JSON.parse(m[0]);if(!Array.isArray(j)&&/flashcards/.test(p))j=Object.values(j).find(Array.isArray)||[];return j};
+const TUT='You are EduSaathi, an expert and friendly tutor for college students. Answer accurately and directly first, then explain step by step with one small example. Use simple language, show formulas or code when useful, and keep it under 180 words unless asked for more. If you are unsure, say so instead of guessing.';
+const TH=[];
+$('ask').onclick=()=>{const q=$('q').value.trim();if(!q)return;say($('chat'),q,'u');$('q').value='';ai(q,say($('chat'),'','b'),TUT,TH).then(t=>{if(t){TH.push({role:'user',content:q},{role:'assistant',content:t});if(TH.length>12)TH.splice(0,2)}})};
+$('q').onkeydown=e=>{if(e.key==='Enter')$('ask').click()};
+$('sum').onclick=()=>{const n=$('nt').value.trim();if(!n)return;$('sumo').style.display='block';ai('Summarise these notes into 5 bullet points and 3 quick revision questions:\n'+n,$('sumo'),TUT)};
+$('hb').onclick=()=>{const q=$('hq').value.trim();if(!q)return;say($('hc'),q,'u');$('hq').value='';ai(q,say($('hc'),'','b'),'You are a friendly university helpdesk agent. Give short, practical answers and say when to contact the university office.')};
+$('rb').onclick=()=>toast('Thanks! Anonymous rating saved for '+$('rc').value);
+$('raise').onclick=()=>{const t=$('ld1').value.trim()||'General';$('lq').textContent='✋ You are #'+(1+Math.floor(Math.random()*3))+' in the doubt queue for “'+t+'”. A mentor will join shortly.'};
+</script>
+<script type="text/plain" data-app>
+let flt='all',tEd=-1;
+const dd=x=>x.d?Math.ceil((new Date(x.d)-new Date(today))/864e5):null;
+const dlab=x=>{const n=dd(x);return n==null?'No date':n<0?'Overdue '+(-n)+'d':n===0?'Today':n===1?'Tomorrow':'In '+n+' days'};
+$('pa').onclick=()=>{const t=$('pt').value.trim();if(!t)return;const a=S.get('plan',[]);a.push({t,d:$('pd').value,k:$('pk').value,done:false});S.set('plan',a);$('pt').value='';pl()};
+$('pt').onkeydown=e=>{if(e.key==='Enter')$('pa').click()};
+document.querySelectorAll('#flt button').forEach(b=>b.onclick=()=>{flt=b.dataset.f;document.querySelectorAll('#flt button').forEach(x=>x.classList.toggle('on',x===b));pl()});
+$('pp').onclick=()=>{const a=S.get('plan',[]).filter(x=>!x.done);if(!a.length){toast('Add tasks first.');return}const o=$('ppo');o.style.display='block';ai('Today is '+today+'. Make a realistic plan for today plus a short outlook for this week. Prioritise by deadline, put exams first, use 25-minute focus blocks with breaks, and weave in these daily wellness habits at sensible times: '+habTxt()+'. Tasks:\n'+a.map(x=>x.k+': '+x.t+' (due '+(x.d||'no date')+')').join('\n'),$('ppo'),TUT)};
+pl();
+{const d=S.get('plan',[]).filter(x=>!x.done&&dd(x)!=null&&dd(x)<=1);if(d.length)setTimeout(()=>toast('Due soon: '+d.map(x=>x.t).join(', ')),800)}
+</script>
+<script type="text/plain" data-app>
+const Q=[['Time complexity of binary search?',['O(n)','O(log n)','O(n²)'],1],['Which is a LIFO structure?',['Queue','Stack','Array'],1],['P(heads) for a fair coin?',['0.25','0.5','1'],1],['NAND is universal?',['Yes','No','Only with NOT'],0],['Ohm\'s law is…',['V=IR','V=I/R','V=I+R'],0]];
+let tabs_=0,exA=S.get('exam',{a:{},t:600,on:false});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&exA.on){tabs_++;toast('Tab switch noted ('+tabs_+'). Stay on this page during the test.')}});
+let exI;
+$('ex').onchange=e=>{if(e.target.dataset.q!=null){exA.a[e.target.dataset.q]=e.target.value;S.set('exam',exA)}};
+exr();
+if(exA.on)exT();
+</script>
+<script type="text/plain" data-app>
+const G=[['Data Structures — Batch 2026','Class group'],['Women in Tech','Virtual club'],['Late-night Learners','Study club'],['Photography Club','Virtual club']];
+const jg=S.get('groups',[]);
+$('grp').onclick=e=>{const i=e.target.dataset.g;if(i==null)return;const k=jg.indexOf(+i);k<0?jg.push(+i):jg.splice(k,1);S.set('groups',jg);gr()};
+gr();
+$('room').oninput=rj;
+rj();
+document.querySelector('.mood').onclick=e=>{const m=e.target.dataset.m;if(!m)return;const d=S.get('moods',{});d[today]=m;S.set('moods',d);$('mo').textContent='Logged '+m+' for today.'+((m==='😟'||m==='😢')?' You are not alone. Consider talking to a friend or counsellor.':'');ins()};
+</script>
+<script type="text/plain" data-app>
+const RF=['rtp','rrl','rn','re','rk','rsu','red','rs1','rx','rce','rjd'],RS='You are an expert resume writer and ATS specialist for students and freshers in India. Be concrete and honest: never invent facts or numbers (use [x] placeholders) and keep it concise.';
+{const v=S.get('res',{});RF.forEach(k=>{if(v[k]!=null)$(k).value=v[k]})}
+const rv=k=>$(k).value.trim(),lines=t=>t.split('\n').map(x=>x.replace(/^[\s•\-*·]+/,'').trim()).filter(Boolean);
+RF.forEach(k=>$(k).oninput=$(k).onchange=()=>{const v={};RF.forEach(z=>v[z]=$(z).value);S.set('res',v);rp()});
+rp();
+const SWD=new Set('the and for with that this from your have will are our you who has can all any but not was were been into their they them than then also able per etc use using used work works working team role good strong must should including include looking join years year'.split(' '));
+let rT='',rK='';
+document.querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>rai(x.dataset.r));
+$('rau').onclick=()=>{if(rK==='sum')$('rsu').value=rT;else if(rK==='bul')$('rx').value=lines(rT).join('\n');else if(rK==='ski')$('rs1').value=[...new Set(((rv('rs1')?rv('rs1')+',':'')+rT).split(',').map(x=>x.trim()).filter(Boolean))].join(', ');$('rsu').oninput();$('rau').style.display='none';toast('Added to your resume')};
+$('rpr').onclick=()=>{const w=open('','_blank');if(!w){toast('Printing is not available here. Use Copy text and paste into Word or Docs.');return}w.document.write('<style>body{font-family:Arial;padding:30px;color:#111}h2{margin:0}h4{border-bottom:1px solid #999;margin:14px 0 4px;text-transform:uppercase;font-size:12px}.hl,.ct{color:#555;font-size:13px}ul{margin:4px 0;padding-left:18px}</style>'+$('rp').innerHTML);w.document.close();w.print()};
+$('rcp').onclick=async()=>{try{await navigator.clipboard.writeText(rtxt());toast('Resume text copied')}catch(e){toast('Could not copy')}};
+$('mq').onclick=async()=>{const b=$('mqo');b.style.display='block';await ai('Ask ONE interview question for this role: '+($('role').value||'fresher')+'. Output only the question.',b,TUT);$('ma').style.display=$('mf').style.display='block'};
+$('mf').onclick=()=>{const b=$('mfo');b.style.display='block';ai('Question: '+$('mqo').textContent+'\nCandidate answer: '+$('ma').value+'\nGive 3 strengths/improvements and a better sample answer, briefly.',b,TUT)};
+</script>
+<script type="text/plain" data-app>
+$('pn').value=S.get('name','');
+$('pc').value=S.get('course','');
+if(S.get('name'))$('hi').textContent='Welcome back, '+S.get('name')+'!';
+$('ps').onclick=()=>{S.set('name',$('pn').value);S.set('course',$('pc').value);$('hi').textContent='Welcome back, '+($('pn').value||'')+'!';toast('Profile saved')};
+</script>
+<script type="text/plain" data-app>
+let DB=null,UID=null,UU=null,tmr,bun=null;
+const blob=()=>{const o={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k.startsWith('uc_'))o[k]=localStorage.getItem(k)}return o};
+$('lg').onclick=()=>login(true);
+login(false);
+$('yu').oninput=()=>{const i=ytid($('yu').value);$('yo').href=i?'https://www.youtube.com/watch?v='+i:'#'};
+$('ys').onclick=()=>{const t=$('yt').value.trim();if(t.length<80){toast('Paste the video transcript first (YouTube: ⋯ → Show transcript).');return}$('yso').style.display='block';ai('Summarise this video transcript for a student: a 2-line overview, 6 key points, key terms, and 3 quiz questions.\n\n'+t.slice(0,7000),$('yso'),TUT)};
+$('bp').onclick=()=>bpost('post');
+$('bk').onclick=()=>bpost('work');
+$('bi').onkeydown=e=>{if(e.key==='Enter')bpost('post')};
+</script>
+<script type="text/plain" data-app>
+const nb=()=>S.get('nb',[]);
+let AU=[];
+nbr();
 $('nba').onclick=()=>{const t=$('nbt').value.trim();if(t.length<30){toast('Paste a few sentences first.');return}const a=nb();a.push({title:$('nbn').value.trim()||('Source '+(a.length+1)),t:t.slice(0,15000)});S.set('nb',a);$('nbt').value=$('nbn').value='';nbr()};
 $('nbf').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('nbt').value=r.result;$('nbn').value=f.name};r.readAsText(f)};
 const ctx=()=>nb().map(s=>'### '+s.title+'\n'+s.t).join('\n\n').slice(0,7000);
@@ -642,13 +866,9 @@ ai(ACT[k]+'\n\n'+ctx(),o,NS)});
 $('nbs').onclick=()=>speechSynthesis.cancel();
 $('nbk').onclick=()=>{const q=$('nbq').value.trim();if(!q)return;if(!nb().length){toast('Add a source first.');return}say($('nbh'),q,'u');$('nbq').value='';ai('Question: '+q+'\n\nSources:\n'+ctx(),say($('nbh'),'','b'),NS)};
 $('nbq').onkeydown=e=>{if(e.key==='Enter')$('nbk').click()};
-
-// ---- history, roadmap, attendance
-function hist(){const h=S.get('hist',{}),d=h[today]||{n:0,min:0};d.n++;d.min+=+$('len').value;h[today]=d;S.set('hist',h);ins()}
-function ins(){const h=S.get('hist',{}),m=S.get('moods',{}),box=$('ins');box.replaceChildren();let tot=0;for(let i=13;i>=0;i--){const dt=new Date(Date.now()-i*864e5).toISOString().slice(0,10),v=(h[dt]||{}).min||0;if(i<7)tot+=v;const c=document.createElement('div');c.style.cssText='flex:1;text-align:center';const b=document.createElement('div');b.style.cssText='height:70px;display:flex;align-items:flex-end';const f=document.createElement('div');f.style.cssText='width:100%;border-radius:4px 4px 0 0;background:var(--p);height:'+Math.min(100,v/1.2)+'%;min-height:'+(v?3:1)+'px;opacity:'+(v?1:.2);f.title=v+' min';b.append(f);const e=document.createElement('div');e.textContent=m[dt]||'·';const l=document.createElement('div');l.className='sm';l.style.fontSize='.7rem';l.textContent=dt.slice(8);c.append(b,e,l);box.append(c)}$('insum').textContent='Last 7 days: '+tot+' min focused'}ins();
-function rrender(r){const o=$('rmo');o.replaceChildren();if(!r)return;const d=r.data,s=document.createElement('p');s.textContent=d.summary||'';o.append(s);
-(d.topics||[]).sort((a,b)=>b.weight-a.weight).forEach(t=>{const e=document.createElement('div');e.style.margin='10px 0';const l=document.createElement('div');l.className='row';l.style.justifyContent='space-between';const n=document.createElement('b');n.textContent=t.name;const w=document.createElement('span');w.className='sm';w.textContent=t.weight+'% · '+t.priority+(t.hours?' · '+t.hours+'h':'')+(t.pyq?' · '+t.pyq+' PYQs':'');l.append(n,w);const b=document.createElement('div');b.className='bar';const i=document.createElement('i');i.style.width=Math.min(100,t.weight*2.5)+'%';b.append(i);e.append(l,b);o.append(e)});
-const hd=document.createElement('h3');hd.textContent='Roadmap';o.append(hd);(d.roadmap||[]).forEach(x=>{const e=document.createElement('div');e.className='li';const a=document.createElement('span');a.textContent=x.focus;const b=document.createElement('span');b.className='sm';b.textContent=x.date;e.append(a,b);o.append(e)});$('rma').style.display='inline-block'}
+</script>
+<script type="text/plain" data-app>
+ins();
 $('rms').oninput=()=>{$('rmq').href='https://www.google.com/search?q='+encodeURIComponent($('rms').value+' previous year question papers')};
 $('rmg').onclick=async()=>{const sub=$('rms').value.trim(),ex=$('rme').value,syl=$('rmt').value.trim();if(!sub||!ex||syl.length<30){toast('Add subject, exam date and syllabus.');return}if(!sample){toast('AI works when opened in Claude.');return}$('rmo').textContent='Analysing syllabus…';
 try{const d=await sample.json('Today is '+today+'. Exam: '+sub+' on '+ex+'.\nSYLLABUS:\n'+syl.slice(0,2500)+'\nPAST PAPERS (may be empty):\n'+($('rmp').value.slice(0,2000)||'none')+'\nAnalyse topic weightage from the syllabus and any past papers; if no papers were given, estimate from typical exam patterns and say so in the summary. Return ONLY JSON: {"summary":"2 lines","topics":[{"name":"","weight":number (weights sum to 100),"priority":"High|Medium|Low","pyq":number of past-paper questions or 0,"hours":number}],"roadmap":[{"date":"YYYY-MM-DD","focus":""}]}. Roadmap: 6-10 milestones from today to the exam, highest-weight topics first, last days for revision and mock tests.',{cache:false});const r={sub,ex,data:d};S.set('road',r);rrender(r)}catch(e){$('rmo').textContent='Could not analyse. Try again.'}};
@@ -656,112 +876,93 @@ $('rma').onclick=()=>{const r=S.get('road',null);if(!r||!r.data)return;const a=S
 {const r=S.get('road',null);if(r&&r.data){$('rms').value=r.sub;$('rme').value=r.ex;rrender(r)}}
 $('att_t').value=S.get('tgt',75);
 let attNew=-1,attEdit=-1,attPrev=[];
-function att(){const a=S.get('att',[]),tg=+$('att_t').value||75;$('atl').replaceChildren(...a.map((x,i)=>{const p=x.t?x.a/x.t*100:100;let msg;if(p>=tg){const k=Math.floor(x.a/(tg/100)-x.t);msg=k>0?'You can miss '+k+' more '+(k==1?'class':'classes'):'Attend the next class to stay safe'}else{msg='Attend the next '+Math.ceil((tg/100*x.t-x.a)/(1-tg/100))+' classes in a row to reach '+tg+'%'}
-const e=document.createElement('div');e.className='li';e.style.display='block';if(i!==attNew)e.style.animation='none';const r=document.createElement('div');r.className='row';r.style.justifyContent='space-between';const n=document.createElement('b');n.textContent=x.s;const q=document.createElement('b');q.textContent=p.toFixed(0)+'%  ('+x.a+'/'+x.t+')';q.style.color=p<tg?'#c9605c':'var(--p)';r.append(n,q);const bar=document.createElement('div');bar.className='bar';const f=document.createElement('i');f.style.width=(attPrev[i]==null?0:attPrev[i])+'%';attPrev[i]=p;requestAnimationFrame(()=>requestAnimationFrame(()=>{f.style.width=p+'%'}));f.style.background=p<tg?'#c9605c':'';bar.append(f);const m=document.createElement('div');m.className='sm';m.textContent=msg;const bt=document.createElement('div');bt.className='row';bt.style.marginTop='6px';
-const mk=(l,fn,c)=>{const z=document.createElement('button');z.textContent=l;z.className=c||'s';z.onclick=()=>{const s=S.get('att',[]);fn(s[i]);S.set('att',s);att()};return z};
-const edit=document.createElement('button');edit.textContent='Edit';edit.className='s';edit.onclick=()=>{attEdit=attEdit===i?-1:i;att()};
-const rem=document.createElement('button');rem.textContent='Remove';rem.className='s';rem.onclick=()=>{e.style.height=e.offsetHeight+'px';void e.offsetHeight;e.classList.add('out');setTimeout(()=>{const s=S.get('att',[]);s.splice(i,1);S.set('att',s);attPrev.splice(i,1);attEdit=-1;att()},400)};
-bt.append(mk('Present',o=>{o.a++;o.t++;(o.l=o.l||[]).push(1)},''),mk('Absent',o=>{o.t++;(o.l=o.l||[]).push(0)}),kebab([['Undo last mark',()=>{const s=S.get('att',[]),o=s[i],z=(o.l||[]).pop();if(z===undefined){toast('Nothing to undo.');return}o.t--;if(z)o.a--;S.set('att',s);att()}],['Edit',()=>edit.onclick()],['Remove',()=>rem.onclick()]]));
-e.append(r,bar,m,bt);
-if(attEdit===i){const ed=document.createElement('div');ed.className='ed';const mi=(ph,v,t)=>{const z=document.createElement('input');z.type=t;z.placeholder=ph;z.value=v;z.setAttribute('aria-label',ph);if(t==='number')z.min=0;return z};const ni=mi('Subject',x.s,'text'),ai=mi('Attended',x.a,'number'),ti=mi('Total classes',x.t,'number');const sv=document.createElement('button');sv.textContent='Save';sv.onclick=()=>{const nm=ni.value.trim();let aa=Math.max(0,Math.floor(+ai.value||0)),tt=Math.max(0,Math.floor(+ti.value||0));if(!nm){toast('Subject name cannot be empty.');return}if(aa>tt){toast('Attended cannot be more than total classes.');return}const s=S.get('att',[]),o=s[i];if(o.a!==aa||o.t!==tt)o.l=[];o.s=nm;o.a=aa;o.t=tt;S.set('att',s);attEdit=-1;att();toast('Subject updated.')};const cn=document.createElement('button');cn.textContent='Cancel';cn.className='s';cn.onclick=()=>{attEdit=-1;att()};ed.append(ni,ai,ti,sv,cn);e.append(ed)}
-return e}));if(!a.length)$('atl').textContent='Add your subjects to start tracking.';attNew=-1}
 $('att_t').onchange=()=>{S.set('tgt',+$('att_t').value);att()};
 $('ats').onkeydown=e=>{if(e.key==='Enter')$('ata').click()};
 $('ata').onclick=()=>{const s=$('ats').value.trim();if(!s)return;const a=S.get('att',[]);a.push({s,a:0,t:0});S.set('att',a);$('ats').value='';attNew=a.length-1;att()};
-att();{const hr=new Date().getHours();$('hi').textContent=(hr<12?'Good morning':hr<18?'Good afternoon':'Good evening')+(S.get('name','')?', '+S.get('name','').split(' ')[0]:'')}
-
-// ---- appearance (wallpaper + text)
+att();
+{const hr=new Date().getHours();$('hi').textContent=(hr<12?'Good morning':hr<18?'Good afternoon':'Good evening')+(S.get('name','')?', '+S.get('name','').split(' ')[0]:'')}
+</script>
+<script type="text/plain" data-app>
 const FN=[['System','system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',''],['Inter','Inter,system-ui,sans-serif','Inter:wght@400;600;700'],['Poppins','Poppins,system-ui,sans-serif','Poppins:wght@400;600;700'],['Nunito (rounded)','Nunito,system-ui,sans-serif','Nunito:wght@400;600;800'],['Lora (serif)','Lora,Georgia,serif','Lora:wght@400;600;700'],['Atkinson (easy to read)','"Atkinson Hyperlegible",Verdana,sans-serif','Atkinson+Hyperlegible:wght@400;700'],['Quicksand (soft)','Quicksand,system-ui,sans-serif','Quicksand:wght@400;600;700'],['Lexend (focus)','Lexend,system-ui,sans-serif','Lexend:wght@400;600'],['Merriweather (serif)','Merriweather,Georgia,serif','Merriweather:wght@400;700'],['JetBrains Mono','"JetBrains Mono",ui-monospace,monospace','JetBrains+Mono:wght@400;600']];
 const WG=[['Mist','linear-gradient(160deg,#dfe9ee,#c9d8e0,#b5c6d3)'],['Dawn','linear-gradient(160deg,#f3e3da,#e6cfd0,#cdc4dc)'],['Lagoon','linear-gradient(160deg,#cfe5e3,#a9cfd2,#86b3c4)'],['Meadow','linear-gradient(160deg,#e3ecd6,#bfd8c0,#92bba6)'],['Dusk','linear-gradient(160deg,#bdb6d6,#9a9bc4,#6f7aa8)'],['Sandstone','linear-gradient(160deg,#efe2cf,#dcc3a4,#c2a283)'],['Night Sky','linear-gradient(160deg,#2b3550,#1f2a44,#131b30)'],['Pine','linear-gradient(160deg,#2f4a42,#223a34,#16282a)']];
-function applyUI(){const u=S.get('ui',{}),r=document.documentElement.style,fi=u.f||0,f=FN[fi];
-if(f[2]&&!document.getElementById('gf'+fi)&&navigator.onLine){const l=document.createElement('link');l.id='gf'+fi;l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family='+f[2]+'&display=swap';document.head.appendChild(l)}
-document.body.style.fontFamily=f[1];r.fontSize=(u.fs||16)+'px';document.body.style.fontSize='1rem';document.body.style.lineHeight=u.lh||1.5;
-let img='';try{img=localStorage.getItem('ucbg')||''}catch(e){}const g=S.get('wpg',''),w=$('wp'),dim=u.dim==null?.25:u.dim;
-document.body.classList.toggle('wp',!!(img||g));const bk=(img?'i'+img.length:'')+'|'+g;if(w._k!==bk){w._k=bk;w.style.backgroundImage=img?'url('+img+')':g}document.documentElement.style.setProperty('--dim',dim);document.documentElement.style.setProperty('--bl',(u.bl||0)+'px');
-$('cf').value=fi;$('fs').value=u.fs||16;$('fsv').textContent=u.fs||16;$('lh').value=u.lh||1.5;$('lhv').textContent=u.lh||1.5;$('dm').value=dim;$('bl').value=u.bl||0;$('cm').value=S.get('theme','')||'';applyExtra(u)}
 const up=(k,v)=>{const u=S.get('ui',{});u[k]=v;S.set('ui',u);applyUI()};
 $('wg').replaceChildren(...WG.map(t=>{const b=document.createElement('button');b.className='wt';b.title=t[0];b.setAttribute('aria-label',t[0]+' wallpaper');b.style.background=t[1];b.onclick=()=>{try{localStorage.removeItem('ucbg')}catch(e){}S.set('wpg',t[1]);applyUI()};return b}));
-$('cf').replaceChildren(...FN.map((f,i)=>new Option(f[0],i)));$('cf').onchange=()=>up('f',+$('cf').value);
-$('fs').oninput=()=>up('fs',+$('fs').value);$('lh').oninput=()=>up('lh',+$('lh').value);$('dm').oninput=()=>up('dim',+$('dm').value);$('bl').oninput=()=>up('bl',+$('bl').value);
+$('cf').replaceChildren(...FN.map((f,i)=>new Option(f[0],i)));
+$('cf').onchange=()=>up('f',+$('cf').value);
+$('fs').oninput=()=>up('fs',+$('fs').value);
+$('lh').oninput=()=>up('lh',+$('lh').value);
+$('dm').oninput=()=>up('dim',+$('dm').value);
+$('bl').oninput=()=>up('bl',+$('bl').value);
 $('wf').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,1280/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);try{localStorage.setItem('ucbg',c.toDataURL('image/jpeg',.72));S.set('wpg','');applyUI();toast('Wallpaper set (saved on this device).')}catch(x){toast('Could not save that image. Try a smaller one.')}};im.src=fr.result};fr.readAsDataURL(f)};
 $('wr').onclick=()=>{try{localStorage.removeItem('ucbg')}catch(e){}S.set('wpg','');applyUI()};
-$('cm').replaceChildren(new Option('Auto light/dark',''),...Object.keys(THM).map(k=>new Option(THM[k][0],k)));$('cm').value=S.get('theme','')||'';$('cm').onchange=()=>setTheme($('cm').value,1);
+$('cm').replaceChildren(new Option('Auto light/dark',''),...Object.keys(THM).map(k=>new Option(THM[k][0],k)));
+$('cm').value=S.get('theme','')||'';
+$('cm').onchange=()=>setTheme($('cm').value,1);
 $('ur').onclick=()=>{S.set('ui',{});S.set('theme','');S.set('wpg','');try{localStorage.removeItem('ucbg')}catch(e){}delete document.documentElement.dataset.theme;applyAcc();applyUI();toast('Appearance reset.')};
-function confetti(n){n=n||26;const cs=['#8294c4','#c993a7','#cba078','#7db09b','#76a8bd'];for(let i=0;i<n;i++){const d=document.createElement('i');d.className='cf';d.style.cssText='left:'+(10+Math.random()*80)+'vw;background:'+cs[i%5]+';--x:'+((Math.random()-.5)*180)+'px;animation-delay:'+(Math.random()*.25)+'s';document.body.appendChild(d);setTimeout(()=>d.remove(),2000)}}
-function applyExtra(u){const d=document.documentElement;d.style.setProperty('--rd',(u.rd||18)+'px');if(u.dn)d.dataset.dn=u.dn;else delete d.dataset.dn;d.dataset.mo=u.mo||'gentle';d.dataset.gl=u.gl===0?'0':'1';d.dataset.gs=u.gs||'';d.style.setProperty('--wm',u.wm||0);$('wmt').style.display=u.wm>0?'block':'none';
-$('rd2').value=u.rd||18;$('gs').value=u.gs||'';$('dn').value=u.dn||'';$('anim').value=u.mo||'gentle';$('gl').checked=u.gl!==0;$('wm').value=u.wm||0;$('sn').checked=u.sn!==0;$('svol').value=u.sv||.7;$('snd').classList.toggle('off',u.sn===0);
-document.querySelectorAll('.sw2').forEach(b=>b.classList.toggle('on',(b.dataset.k||'')===(u.ac||'')));applyAcc()}
 $('ac').replaceChildren(...[['','Auto',null]].concat(Object.keys(ACS).map(k=>[k,ACS[k][0],ACS[k][1]])).map(a=>{const b=document.createElement('button');b.className='sw2';b.dataset.k=a[0];b.title=a[1]+(a[0]?'':' (changes with each tab)');b.setAttribute('aria-label',a[1]+' accent');if(a[2])b.style.background='linear-gradient(135deg,'+a[2][0]+','+a[2][1]+')';else{b.textContent='A';b.style.background='var(--cd)'}b.onclick=()=>up('ac',a[0]||0);return b}));
-$('rd2').onchange=()=>up('rd',+$('rd2').value);$('dn').onchange=()=>up('dn',$('dn').value);$('anim').onchange=()=>up('mo',$('anim').value);$('gl').onchange=()=>up('gl',$('gl').checked?1:0);$('wm').oninput=()=>up('wm',+$('wm').value);
-$('sn').onchange=()=>{up('sn',$('sn').checked?1:0);if($('sn').checked)tick(560)};$('svol').oninput=()=>{up('sv',+$('svol').value)};$('svol').onchange=()=>tick(560);
+$('rd2').onchange=()=>up('rd',+$('rd2').value);
+$('dn').onchange=()=>up('dn',$('dn').value);
+$('anim').onchange=()=>up('mo',$('anim').value);
+$('gl').onchange=()=>up('gl',$('gl').checked?1:0);
+$('wm').oninput=()=>up('wm',+$('wm').value);
+$('sn').onchange=()=>{up('sn',$('sn').checked?1:0);if($('sn').checked)tick(560)};
+$('svol').oninput=()=>{up('sv',+$('svol').value)};
+$('svol').onchange=()=>tick(560);
 $('snd').onclick=()=>{const u=S.get('ui',{}),on=u.sn===0;up('sn',on?1:0);if(on)setTimeout(()=>tick(560),30)};
-// tap sound (Web Audio, soft click)
-let AC_=null;function tick(f,v){const u=S.get('ui',{});if(u.sn===0)return;try{AC_=AC_||new (window.AudioContext||window.webkitAudioContext)();if(AC_.state==='suspended')AC_.resume();const t=AC_.currentTime,o=AC_.createOscillator(),g=AC_.createGain(),vol=(v==null?(u.sv||.7):v)*.45;o.type='sine';o.frequency.setValueAtTime(f||460,t);o.frequency.exponentialRampToValueAtTime((f||460)*.62,t+.07);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(vol,.0002),t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+.11);o.connect(g);g.connect(AC_.destination);o.start(t);o.stop(t+.12)}catch(e){}}
+</script>
+<script type="text/plain" data-app>
+let AC_=null;
 document.addEventListener('pointerdown',e=>{const el=e.target.closest('button,.btn,.fc,input[type=checkbox],input[type=radio],#brand');if(!el||el.id==='snd'||el.id==='sn')return;tick(el.closest('nav')?620:el.matches('input')?520:440)},true);
-// about dialog
+</script>
+<script type="text/plain" data-app>
 (function(){const a=$('abt');function open(){a.style.display='flex';requestAnimationFrame(()=>requestAnimationFrame(()=>a.classList.add('show')));document.body.style.overflow='hidden';hopen('abt')}function hide(){a.classList.remove('show');document.body.style.overflow='';setTimeout(()=>{if(!a.classList.contains('show'))a.style.display='none'},420)}function close(){if(history.state&&history.state.o==='abt')history.back();else hide()}window.__abtHide=hide;
 $('brand').onclick=open;$('brand').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};$('abx').onclick=close;a.onclick=e=>{if(e.target===a)close()};addEventListener('keydown',e=>{if(e.key==='Escape'&&a.classList.contains('show'))close()})})();
-
 {const g=()=>S.get('aic',{}),sv=(k,v)=>{const c=g();c[k]=v;S.set('aic',c)},vis=()=>{const m=$('aim').value;$('air').style.display=m==='remote'?'block':'none';$('ail').style.display=m==='local'?'block':'none';$('acl').style.display=m==='cloud'?'block':'none'},c=AIC();
 $('aim').value=c.m;$('aimd').value=c.model;$('aiu').value=c.url;$('aik').value=c.key;$('aic').value=c.cm;vis();
 $('aim').onchange=()=>{sv('m',$('aim').value);vis()};$('aimd').onchange=()=>sv('model',$('aimd').value);$('aiu').onchange=()=>sv('url',$('aiu').value.trim());$('aic').onchange=()=>sv('cm',$('aic').value.trim());$('aik').onchange=()=>{try{localStorage.setItem('ucaik',$('aik').value.trim())}catch(e){}};
 $('aild').onclick=async()=>{$('aild').disabled=true;try{await wl((tx,p)=>{$('aib').style.width=Math.round(p*100)+'%';$('aip').textContent=tx});$('aip').textContent='✔ Model ready. It now works offline.';toast('AI model ready')}catch(e){$('aip').textContent=aiErr(e)}$('aild').disabled=false}}
 applyUI();
 document.addEventListener('click',e=>{if(document.documentElement.dataset.mo!=='lively')return;const b=e.target.closest('button,.btn');if(!b||b.matches('nav button'))return;const r=b.getBoundingClientRect(),z=Math.max(r.width,r.height)*2,i=document.createElement('i');i.className='rp';i.style.cssText='width:'+z+'px;height:'+z+'px;left:'+(e.clientX-r.left-z/2)+'px;top:'+(e.clientY-r.top-z/2)+'px';b.appendChild(i);setTimeout(()=>i.remove(),650)});
-
-// ---- 3-dot menu helper
-function kclose(){document.querySelectorAll('.mn.on').forEach(x=>x.remove())}
-function kebab(items){const w=document.createElement('span');w.className='kb';const b=document.createElement('button');b.className='s kbb';b.textContent='⋮';b.setAttribute('aria-label','More options');
-b.onclick=ev=>{ev.stopPropagation();const had=b.dataset.o;kclose();document.querySelectorAll('.kbb').forEach(x=>delete x.dataset.o);if(had)return;b.dataset.o=1;const m=document.createElement('div');m.className='mn on';(typeof items==='function'?items():items).forEach(([l,f])=>{const z=document.createElement('button');z.className='s';z.textContent=l;z.onclick=e2=>{e2.stopPropagation();kclose();delete b.dataset.o;f()};m.append(z)});
-m.style.cssText='position:fixed;visibility:hidden;top:0;right:0';document.body.append(m);const r=b.getBoundingClientRect(),h=m.offsetHeight,vh=innerHeight;let t=r.bottom+6;if(t+h>vh-110)t=r.top-h-6;t=Math.max(70,Math.min(t,vh-h-10));m.style.cssText='position:fixed;z-index:80;top:'+t+'px;right:'+Math.max(8,innerWidth-r.right)+'px'};w.append(b);return w}
-document.addEventListener('click',()=>{kclose();document.querySelectorAll('.kbb').forEach(x=>delete x.dataset.o)});addEventListener('scroll',()=>{kclose();document.querySelectorAll('.kbb').forEach(x=>delete x.dataset.o)},true);
-// ---- custom agenda (mind / body / study habits)
+</script>
+<script type="text/plain" data-app>
+document.addEventListener('click',()=>{kclose();document.querySelectorAll('.kbb').forEach(x=>delete x.dataset.o)});
+addEventListener('scroll',()=>{kclose();document.querySelectorAll('.kbb').forEach(x=>delete x.dataset.o)},true);
+</script>
+<script type="text/plain" data-app>
 const HC={mind:'🧠',body:'💪',study:'📚',rest:'🌙',social:'💬'},HS=[['💧 Drink water','body'],['🚶 10-min walk','body'],['🧘 5-min meditation','mind'],['📓 Journal / gratitude','mind'],['🏃 Workout','body'],['😴 Sleep before 11 pm','rest'],['🌞 Sunlight 10 min','body'],['📵 Screen-free break','rest'],['📞 Call a friend','social'],['🥗 Healthy meal','body']];
 if(!S.get('hab',null))S.set('hab',[{id:'h1',t:'💧 Drink water every 2 hours',c:'body',m:''},{id:'h2',t:'🚶 10-min walk after 90 min study',c:'body',m:''},{id:'h3',t:'😴 Sleep before 11 pm',c:'rest',m:'22:45'}]);
-let hEd=null;const hdn=()=>(S.get('habd',{})[today]||[]),habTxt=()=>S.get('hab',[]).map(h=>h.t+(h.m?' ('+h.m+')':'')).join('; ')||'none',hid=()=>'h'+Date.now().toString(36)+Math.floor(Math.random()*99);
-function hr(){const a=S.get('hab',[]).slice().sort((x,y)=>(x.m||'99').localeCompare(y.m||'99')),dd_=hdn(),now=new Date().toTimeString().slice(0,5),nd=a.filter(h=>dd_.includes(h.id)).length;
-$('agp').textContent=a.length?nd+' of '+a.length+' done today · '+Object.keys(HC).map(k=>{const t=a.filter(h=>h.c===k);return t.length?HC[k]+' '+t.filter(h=>dd_.includes(h.id)).length+'/'+t.length:''}).filter(Boolean).join('  '):'Add habits for your mind and body below.';$('agbar').style.width=(a.length?nd/a.length*100:0)+'%';
-$('agl').replaceChildren(...a.map(h=>{const e=document.createElement('div');e.className='li';e.style.flexWrap='wrap';const c=document.createElement('input');c.type='checkbox';c.checked=dd_.includes(h.id);c.onchange=()=>{const d=S.get('habd',{}),l=d[today]||[];d[today]=c.checked?[...new Set([...l,h.id])]:l.filter(x=>x!==h.id);S.set('habd',d);if(c.checked)confetti(14);hr()};
-const t=document.createElement('div');t.className='grow';const b=document.createElement('div');b.textContent=h.t;if(c.checked)b.style.textDecoration='line-through';const m=document.createElement('div');m.className='sm';m.textContent=HC[h.c]+' '+h.c[0].toUpperCase()+h.c.slice(1)+(h.m?' · '+h.m:'');if(h.m&&h.m<=now&&!c.checked)m.style.color='#d97706';t.append(b,m);
-e.append(c,t,kebab([['Edit',()=>{hEd=hEd===h.id?null:h.id;hr()}],['Remove',()=>{S.set('hab',S.get('hab',[]).filter(x=>x.id!==h.id));hr()}]]));
-if(hEd===h.id){const ed=document.createElement('div');ed.className='ed';ed.style.width='100%';const ti=document.createElement('input');ti.value=h.t;const ci=document.createElement('select');Object.keys(HC).forEach(k=>ci.add(new Option(HC[k]+' '+k,k)));ci.value=h.c;const mi=document.createElement('input');mi.type='time';mi.value=h.m||'';const sv=document.createElement('button');sv.textContent='Save';sv.onclick=()=>{if(!ti.value.trim()){toast('Name cannot be empty.');return}const s=S.get('hab',[]),o=s.find(x=>x.id===h.id);o.t=ti.value.trim();o.c=ci.value;o.m=mi.value;S.set('hab',s);hEd=null;hr()};ed.append(ti,ci,mi,sv);e.append(ed)}return e}));
-const have=new Set(a.map(h=>h.t));$('agq').replaceChildren(...HS.filter(x=>!have.has(x[0])).slice(0,6).map(x=>{const c=document.createElement('span');c.className='chip';c.textContent='+ '+x[0];c.onclick=()=>{const s=S.get('hab',[]);s.push({id:hid(),t:x[0],c:x[1],m:''});S.set('hab',s);hr()};return c}))}
+let hEd=null;
+const hdn=()=>(S.get('habd',{})[today]||[]),habTxt=()=>S.get('hab',[]).map(h=>h.t+(h.m?' ('+h.m+')':'')).join('; ')||'none',hid=()=>'h'+Date.now().toString(36)+Math.floor(Math.random()*99);
 $('agb').onclick=()=>{const t=$('agt').value.trim();if(!t)return;const s=S.get('hab',[]);s.push({id:hid(),t,c:$('agc').value,m:$('agm').value});S.set('hab',s);$('agt').value=$('agm').value='';hr()};
-$('agt').onkeydown=e=>{if(e.key==='Enter')$('agb').click()};hr();
-// ---- AI provider + key
+$('agt').onkeydown=e=>{if(e.key==='Enter')$('agb').click()};
+hr();
+</script>
+<script type="text/plain" data-app>
 {const pv=()=>AIC().pv||'poll',h=()=>{const P=PRE[$('acp').value];$('ack').style.display=P.key?'block':'none';$('akh').innerHTML=P.key?'Get a free key at <a target="_blank" rel="noopener" href="'+P.link+'">'+P.link.replace('https://','')+'</a> for fast, smart open-source Llama answers.':'Works without a key but can be slow. For fast, smart answers add a free Groq key.'};
 $('acp').value=pv();$('ack').value=localStorage.getItem('ucak_'+pv())||'';h();
 $('acp').onchange=()=>{const c=S.get('aic',{});c.pv=$('acp').value;S.set('aic',c);$('ack').value=localStorage.getItem('ucak_'+c.pv)||'';h()};
 $('ack').onchange=()=>{try{localStorage.setItem('ucak_'+$('acp').value,$('ack').value.trim())}catch(e){}toast('Key saved on this device')}}
-
-// ---- Focus drawer menu + task menu
+</script>
+<script type="text/plain" data-app>
 {const tg=(id,l)=>[l+': '+($(id).checked?'On':'Off'),()=>{$(id).checked=!$(id).checked;$(id).dispatchEvent(new Event('change'));toast(l+($(id).checked?' on':' off'))}];
 $('fk').replaceChildren(kebab(()=>[[$('fset').style.display==='none'?'Timer settings':'Hide settings',()=>{const f=$('fset');f.style.display=f.style.display==='none'?'block':'none'}],['Reset timer',()=>$('rs').click()],tg('arest','Auto-rest'),tg('anext','Auto-start next'),tg('dnd','Block alerts')]))}
-
-// ---- drawer-style select (replaces native popup)
-function csel(sel){sel.style.display='none';const b=document.createElement('button');b.type='button';b.className='s csb';b.setAttribute('aria-haspopup','listbox');sel.after(b);
-const lab=()=>{const o=sel.options[sel.selectedIndex];b.replaceChildren(Object.assign(document.createElement('span'),{textContent:o?o.text:''}),Object.assign(document.createElement('span'),{textContent:'▾',className:'cv'}))};
-sel.csync=lab;lab();new MutationObserver(lab).observe(sel,{childList:true});sel.addEventListener('change',lab);
-b.onclick=ev=>{ev.stopPropagation();const had=b.dataset.o;kclose();document.querySelectorAll('.kbb,.csb').forEach(x=>delete x.dataset.o);if(had)return;b.dataset.o=1;const m=document.createElement('div');m.className='mn on';
-[...sel.options].forEach(o=>{const z=document.createElement('button');z.className='s'+(o.value===sel.value?' act':'');z.textContent=o.text;z.onclick=e2=>{e2.stopPropagation();kclose();delete b.dataset.o;sel.value=o.value;sel.dispatchEvent(new Event('change'));lab()};m.append(z)});
-m.style.cssText='position:fixed;visibility:hidden;top:0;left:0';document.body.append(m);const r=b.getBoundingClientRect(),h=m.offsetHeight,vh=innerHeight,w=Math.max(r.width,170);let t=r.bottom+6;if(t+h>vh-110)t=r.top-h-6;m.style.cssText='position:fixed;z-index:80;min-width:'+w+'px;max-width:calc(100vw - 16px);max-height:'+(vh-190)+'px;overflow:auto;top:'+Math.max(70,Math.min(t,vh-h-10))+'px;left:'+Math.max(8,Math.min(r.left,innerWidth-w-8))+'px'};}
-csel($('pk'));csel($('ft'));
-
-// ---- v6: history / back, swipe, fullscreen video, labs, light sliders
+</script>
+<script type="text/plain" data-app>
+csel($('pk'));
+csel($('ft'));
+</script>
+<script type="text/plain" data-app>
 var HI=0;
-function hpush(){if(!HI)return;const s=history.state;if(s&&!s.o&&s.g===curG&&s.s===curS[curG])return;try{history.pushState({g:curG,s:curS[curG]},'')}catch(e){}}
-function hopen(o){if(!HI)return;try{history.pushState({o:o,g:curG,s:curS[curG]},'')}catch(e){}}
-function yhide(){document.body.classList.remove('yfs')}
-function yfs(){document.body.classList.add('yfs');hopen('yfs')}
-function yq(){if(history.state&&history.state.o==='yfs')history.back();else yhide()}
-$('lpf').onclick=yfs;$('lpq').onclick=yq;
+$('lpf').onclick=yfs;
+$('lpq').onclick=yq;
 addEventListener('popstate',e=>{const st=e.state||{g:'home',s:'home'};kclose();
 if(document.body.classList.contains('yfs')&&st.o!=='yfs')yhide();
 if($('abt').classList.contains('show')&&st.o!=='abt'&&window.__abtHide)window.__abtHide();
 if(!st.o&&st.g&&(st.g!==curG||st.s!==curS[st.g]))go(st.g,st.s,1)});
 $('cust').onclick=()=>go('profile','custom');
 $('cbk').onclick=()=>{if(history.state&&history.state.s==='custom')history.back();else go('profile','profile')};
-// swipe between pages (Instagram-style drag)
+</script>
+<script type="text/plain" data-app>
 {const PG=[['home','home'],['study','classes'],['study','doubts'],['planner','planner'],['planner','agenda'],['connect','community'],['connect','career'],['profile','profile']],M=document.querySelector('main');
 let sx=0,sy=0,st=0,sw=0,dx=0;const idx=()=>PG.findIndex(p=>p[0]===curG&&p[1]===curS[curG]);
 document.addEventListener('touchstart',e=>{sw=0;if(e.touches.length>1||idx()<0||document.body.classList.contains('yfs')||$('abt').classList.contains('show'))return;const t=e.touches[0];if(t.clientX<22||t.clientX>innerWidth-22)return;if(e.target.closest('header,nav,input,textarea,select,iframe,.mn,.csb,#ins'))return;sx=t.clientX;sy=t.clientY;st=Date.now();sw=1},{passive:true});
@@ -772,15 +973,18 @@ if(!ok){M.style.transition='transform .25s cubic-bezier(.22,1,.36,1)';M.style.tr
 const d=dx<0?-1:1;M.style.transition='transform .16s ease-in';M.style.transform='translateX('+d*innerWidth*.6+'px)';
 setTimeout(()=>{go(PG[n][0],PG[n][1]);M.style.transition='none';M.style.transform='translateX('+(-d*innerWidth*.35)+'px)';void M.offsetWidth;M.style.transition='transform .3s cubic-bezier(.22,1,.36,1)';M.style.transform='';setTimeout(()=>{M.style.transition=''},330)},160)},{passive:true});
 document.addEventListener('touchcancel',()=>{if(sw===2)M.style.transform='';sw=0},{passive:true})}
-// sliders: update instantly, save later (no full re-render -> blur stays in sync)
+</script>
+<script type="text/plain" data-app>
 {let ut;const lite=(k,v,css,val)=>{document.documentElement.style.setProperty(css,val);clearTimeout(ut);ut=setTimeout(()=>{const u=S.get('ui',{});u[k]=v;S.set('ui',u)},250)};
 $('bl').oninput=()=>lite('bl',+$('bl').value,'--bl',$('bl').value+'px');
 $('dm').oninput=()=>lite('dim',+$('dm').value,'--dim',$('dm').value);
 $('wm').oninput=()=>{lite('wm',+$('wm').value,'--wm',$('wm').value);$('wmt').style.display=+$('wm').value>0?'block':'none'}}
 $('gs').onchange=()=>up('gs',$('gs').value);
-// tap sound on by default (one-time reset of old "off")
+</script>
+<script type="text/plain" data-app>
 if(!S.get('snv6',0)){const u=S.get('ui',{});delete u.sn;S.set('ui',u);S.set('snv6',1)}
-// virtual lab suggestions from what the student is studying
+</script>
+<script type="text/plain" data-app>
 const LABS=[
 ['Circuit Construction Kit (PhET)',/circuit|ohm|resistor|voltage|current|kirchh|capacitor|inductor|electrical|basic electronics|diode|bjt/i,'https://phet.colorado.edu/en/simulations/circuit-construction-kit-dc','Build circuits and measure voltage and current'],
 ['Falstad Circuit Simulator',/circuit|analog|op-?amp|amplifier|transistor|mosfet|diode|filter|rectifier|rlc|vlsi|cmos|electronics/i,'https://falstad.com/circuit/','Real-time analog and digital circuit simulation'],
@@ -797,17 +1001,53 @@ const LABS=[
 ['Plinko Probability (PhET)',/probabil|statistic|distribution|binomial|random|sampling|variance/i,'https://phet.colorado.edu/en/simulations/plinko-probability','Watch distributions build up'],
 ['Desmos Graphing',/calculus|math|function|graph|derivative|integral|algebra|trigonometry|matri|differential|laplace/i,'https://www.desmos.com/calculator','Plot functions and see them change'],
 ['Balancing Equations (PhET)',/chemi|reaction|equation|stoichiometry|molecul|periodic|acid/i,'https://phet.colorado.edu/en/simulations/balancing-chemical-equations','Balance chemical equations visually']];
-function vlr(){const src=[],pp=S.get('plan',[]);if(cL!=null){const l=lx().find(x=>x.id===cL);l&&src.push([l.title,'the lecture you are watching'])}
-const v=$('ft').value;if(v!==''&&pp[v])src.push([pp[v].t,'your focus task']);
-const lc=lx().filter(l=>!l.done&&(l.pos>0||l.pct>0)).pop();lc&&src.push([lc.title,'your last lecture']);
-const ex=pp.filter(x=>!x.done).sort((a,b)=>(a.d||'9').localeCompare(b.d||'9'))[0];ex&&src.push([ex.t,'your next deadline']);
-const r=S.get('road',null);r&&r.sub&&src.push([r.sub,'your exam roadmap']);nb().slice(-2).forEach(s=>src.push([s.title,'your notebook']));
-let best=[],why='';for(const [t,w] of src){const m=LABS.filter(L=>L[1].test(t));if(m.length){best=m.slice(0,3);why='Because of '+w+': “'+t+'”';break}}
-$('vlw').textContent=best.length?why:(src.length?'No exact lab for “'+src[0][0]+'” yet. Try these popular ones.':'Start a lecture or pick a focus task and a matching lab shows up here.');
-if(!best.length)best=[LABS[0],LABS[2],LABS[4]];
-$('vls').replaceChildren(...best.map(L=>{const e=document.createElement('div');e.className='li';const t=document.createElement('span');t.className='grow';t.innerHTML='<b></b><div class="sm"></div>';t.firstChild.textContent=L[0];t.lastChild.textContent=L[3];const a=document.createElement('a');a.className='btn s';a.target='_blank';a.rel='noopener';a.href=L[2];a.textContent='Open';e.append(t,a);return e}))}
-$('ft').addEventListener('change',vlr);vlr();
-applyUI();HI=1;try{history.replaceState({g:curG,s:curS[curG]},'')}catch(e){}
-
-window.__boot=1;
-</script></body></html>
+$('ft').addEventListener('change',vlr);
+vlr();
+applyUI();
+HI=1;
+try{history.replaceState({g:curG,s:curS[curG]},'')}catch(e){}
+</script>
+<script type="text/plain" data-app>
+const NATIVE=()=>!!(window.Capacitor&&typeof Capacitor.nativePromise==='function'&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());
+const asText=d=>typeof d==='string'?d:(d==null?'':JSON.stringify(d));
+const asObj=d=>{if(d&&typeof d==='object')return d;try{return JSON.parse(d)}catch(e){return null}};
+const retry=async(f,n)=>{try{return await f()}catch(e){if(!(n>0)||(e&&/^yt-(nocaps|login)$/.test(e.message)))throw e;await new Promise(r=>setTimeout(r,1200));return retry(f,n-1)}};
+const UA_AND='com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
+const YS='You are EduSaathi, a friendly tutor. Be accurate, use only the video transcript given, and use simple language.';
+let ytAuto=false;
+$('yt').addEventListener('input',()=>{ytAuto=false});
+$('yu').addEventListener('input',()=>{if(ytAuto){$('yt').value='';ytAuto=false}});
+$('yu').placeholder='YouTube link (transcript is fetched automatically)';
+$('yt').placeholder='Optional: if auto-fetch fails, paste the transcript here';
+$('ys').onclick=async()=>{const box=$('yso'),btn=$('ys');box.style.display='block';let t=$('yt').value.trim(),title='';
+if(btn.disabled)return;
+try{btn.disabled=true;
+if(t.length<80){const id=ytid2($('yu').value);if(!id){box.textContent='Paste a YouTube link above (youtube.com/watch?v=…, youtu.be/… or a Shorts link).';return}
+box.textContent='Fetching the video transcript…';
+const r=await retry(()=>ytTranscript(id),1);t=r.text;title=r.title;$('yt').value=t;ytAuto=true;
+box.textContent='Got '+(r.auto?'auto-generated ':'')+'captions ('+r.lang+', '+t.length.toLocaleString()+' characters). Summarising…'}
+const out=await ytSummarise(t,title,box);box.textContent=(title?'🎬 '+title+'\n\n':'')+out}
+catch(e){box.textContent=e&&e.yt?ytErr(e):aiErr(e)}finally{btn.disabled=false}};
+</script>
+<script type="text/plain" data-app>
+const CDN={pdf:'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',pdfw:'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js',ocr:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',zip:'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'};
+const upLoad=(()=>{const c={};return u=>c[u]||(c[u]=new Promise((ok,no)=>{const s=document.createElement('script');s.src=u;s.onload=ok;s.onerror=()=>{delete c[u];no(new Error('cdn'))};document.head.appendChild(s)}))})();
+const upIn=document.createElement('input');
+upIn.type='file';
+upIn.hidden=true;
+upIn.accept='application/pdf,image/*,text/plain,.pdf,.docx,.txt,.md,.csv';
+document.body.appendChild(upIn);
+let upT='rmt';
+document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{upT=b.dataset.up;upIn.click()});
+upIn.onchange=async()=>{const f=upIn.files[0],tid=upT,ta=$(tid),st=$(tid+'s'),bt=document.querySelector('[data-up="'+tid+'"]');upIn.value='';if(!f)return;
+const say=m=>{st.textContent=m};bt.disabled=true;
+try{say('Reading '+f.name+'…');const r=await extractFile(f,say);ta.value=ta.value.trim()?ta.value.trim()+'\n\n'+r.text:r.text;say('📄 '+f.name+' · '+r.text.length.toLocaleString()+' characters'+r.note+'. Now tap “Analyse”.')}
+catch(e){const m=e&&e.message;say(m==='type'?'Unsupported file. Use PDF, Word (.docx), a photo/image, or a text file.':m==='big'?'File is too large (max 20 MB).':m==='empty'?'No readable text found in this file.':m==='cdn'?'Needs internet once to load the file reader. Check your connection and try again.':'Could not read this file. Try another one, or paste the text.')}
+finally{bt.disabled=false}};
+$('rmg').onclick=async()=>{const sub=$('rms').value.trim(),ex=$('rme').value,syl=$('rmt').value.trim(),pq=$('rmp').value.trim();if(!sub||!ex||syl.length<30){toast('Add subject, exam date and syllabus.');return}
+const o=$('rmo'),b=$('rmg');if(b.disabled)return;b.disabled=true;o.textContent='Analysing syllabus…';
+try{const say=m=>{o.textContent=m};const st=await condense(syl,'syllabus',3600,say),pt=pq?await condense(pq,'pyq',3200,say):'';say('Building your weightage and roadmap…');
+const d=await sample.json('Today is '+today+'. Exam: '+sub+' on '+ex+'.\nSYLLABUS:\n'+st+'\nPAST PAPERS (may be empty):\n'+(pt||'none')+'\nAnalyse topic weightage from the syllabus and any past papers; if no papers were given, estimate from typical exam patterns and say so in the summary. Return ONLY JSON: {"summary":"2 lines","topics":[{"name":"","weight":number (weights sum to 100),"priority":"High|Medium|Low","pyq":number of past-paper questions or 0,"hours":number}],"roadmap":[{"date":"YYYY-MM-DD","focus":""}]}. Roadmap: 6-10 milestones from today to the exam, highest-weight topics first, last days for revision and mock tests.',{cache:false});
+const r={sub,ex,data:d};S.set('road',r);rrender(r)}catch(e){o.textContent='Could not analyse. Check your internet and try again.'}finally{b.disabled=false}};
+</script>
+<script>window.__start()</script></body></html>
