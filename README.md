@@ -28,10 +28,6 @@ Your API key stays on your device.
 
 Single-file HTML, CSS and JavaScript app packaged for Android with [Capacitor](https://capacitorjs.com). Progress saves locally on the device.
 
-## Build the APK
-
-Push to `main`, or run the **Build APK** workflow from the Actions tab. Download the APK from the run's **Artifacts**.
-
 ## Developer
 
 Built by **Akash Kumar Yadav**
