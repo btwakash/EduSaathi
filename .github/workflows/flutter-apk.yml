@@ -1,14 +1,9 @@
 name: Build Flutter APK
 on:
   workflow_dispatch:
-  push:
-    paths: ["flutter/**"]
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: flutter
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -19,17 +14,24 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Generate Android platform folder
-        run: flutter create --org com.edusaathi --project-name edusaathi --platforms=android .
-      - name: Patch manifest (internet + https links)
+      - name: Unpack project from zip
         run: |
+          mkdir -p /tmp/proj
+          unzip -q EduSaathi-flutter-fixed.zip -d /tmp/proj
+          F=$(find /tmp/proj -name pubspec.yaml | head -n 1)
+          if [ -z "$F" ]; then echo "No pubspec.yaml found in the zip"; exit 1; fi
+          echo "PROJ=$(dirname "$F")" >> "$GITHUB_ENV"
+      - name: Build APK
+        run: |
+          cd "$PROJ"
+          flutter create --org com.edusaathi --project-name edusaathi --platforms=android .
           M=android/app/src/main/AndroidManifest.xml
-          sed -i '0,/<application/s##<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' $M
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' $M
           sed -i 's#</manifest>#    <queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent></queries>\n</manifest>#' $M
-      - run: flutter pub get
-      - run: dart run flutter_launcher_icons
-      - run: flutter build apk --release
+          flutter pub get
+          dart run flutter_launcher_icons
+          flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
           name: EduSaathi-apk
-          path: flutter/build/app/outputs/flutter-apk/app-release.apk
+          path: ${{ env.PROJ }}/build/app/outputs/flutter-apk/app-release.apk
