@@ -15,7 +15,7 @@
 </p>
 # EduSaathi
 
-Your calm study companion. EduSaathi puts planning, learning, attendance, doubts, community and career prep in one Android app, built to stay easy on the eyes and work with unstable internet.
+Your calm study companion. EduSaathi puts planning, learning, attendance, doubts, community and career preparation in one Android app, built to stay easy on the eyes and work with unstable internet.
 
 ## Features
 
@@ -48,4 +48,3 @@ Single-file HTML, CSS and JavaScript app packaged for Android with [Capacitor](h
 Built by **Akash Kumar Yadav**
 
 - LinkedIn: https://www.linkedin.com/in/akash-yadav-9bbb97415
-- GitHub: https://github.com/btwakash
