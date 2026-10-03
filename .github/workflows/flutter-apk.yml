@@ -29,6 +29,7 @@ jobs:
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' $M
           sed -i 's#</manifest>#    <queries><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent></queries>\n</manifest>#' $M
           flutter pub get
+          find ~/.pub-cache/hosted -name 'build.gradle*' -exec sed -i 's/proguard-android\.txt/proguard-android-optimize.txt/g' {} +
           sed -i -E 's/^([[:space:]]*)ios:[[:space:]]*true/\1ios: false/' pubspec.yaml
           dart run flutter_launcher_icons
           flutter build apk --release
