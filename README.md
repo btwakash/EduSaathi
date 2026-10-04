@@ -5,7 +5,7 @@
 # EduSaathi
 
 ### Your study buddy, all in one app.
-*you academic saathi: lectures, AI tutor, planner and may more.*
+*you academic saathi: lectures, AI tutor, planner and many more.*
 
 [![Download](https://img.shields.io/badge/⬇️_Download-Latest_APK-2ea44f?style=for-the-badge)](../../releases/latest)
 
@@ -80,5 +80,5 @@ Open an **[Issue](../../issues/new)** and tell us:
 ---
 
 <div align="center">
-Made with ❤️ for students. Happy studying!
+Made with ❤️ by a student for students. Happy studying!
 </div>
