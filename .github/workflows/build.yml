@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Inject AI config
-        run: sed -i "s|__AI_KEY__|${{ secrets.GROQ_API_KEY }}|; s|__AI_MODEL__|${{ vars.AI_MODEL }}|; s|__AI_TPM__|${{ vars.AI_TPM }}|; s|__AI_PROXY_URL__||" www/index.html
+        run: sed -i "s|__AI_KEY__|${{ secrets.GROQ_KEY }}|; s|__AI_MODEL__|${{ vars.AI_MODEL }}|; s|__AI_TPM__|${{ vars.AI_TPM }}|; s|__AI_PROXY_URL__||" www/index.html
       - name: Verify key was injected
         run: grep -q "gsk_" www/index.html
       - uses: actions/setup-node@v4
@@ -20,6 +20,18 @@ jobs:
         with: {distribution: temurin, java-version: 17}
       - run: npm install
       - run: npx cap add android
+      - name: Set app icon from logo.png
+        run: |
+          IM=$(command -v magick || command -v convert)
+          R=android/app/src/main/res
+          for d in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+            IFS=: read n s f <<< "$d"
+            mkdir -p $R/mipmap-$n
+            $IM logo.png -resize ${s}x${s} $R/mipmap-$n/ic_launcher.png
+            $IM logo.png -resize ${s}x${s} $R/mipmap-$n/ic_launcher_round.png
+            g=$((f*66/100))
+            $IM logo.png -resize ${g}x${g} -background none -gravity center -extent ${f}x${f} $R/mipmap-$n/ic_launcher_foreground.png
+          done
       - run: npx cap sync android
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk EduSaathi.apk
