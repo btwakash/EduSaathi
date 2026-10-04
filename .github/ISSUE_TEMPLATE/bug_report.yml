@@ -1,4 +1,4 @@
-name: ðŸž Bug report
+name: Bug report
 description: Something is not working in EduSaathi
 title: "[Bug]: "
 labels: ["bug"]
@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve EduSaathi! ðŸ™ Please fill in the details below so we can fix the problem quickly.
+        Thanks for helping improve EduSaathi! Please fill in the details below so we can fix the problem quickly.
         **Never share your API key or password in this issue.**
   - type: textarea
     id: what-happened
