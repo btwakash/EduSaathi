@@ -35,6 +35,7 @@ jobs:
       - run: npx cap add android
 
       - name: Set app icon from logo.png
+        continue-on-error: true
         run: |
           if [ ! -f logo.png ]; then echo "::warning::logo.png not found in repo root, using default icon"; exit 0; fi
           IM=$(command -v magick || command -v convert)
