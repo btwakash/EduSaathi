@@ -1,0 +1,103 @@
+name: ðŸž Bug report
+description: Something is not working in EduSaathi
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve EduSaathi! ðŸ™ Please fill in the details below so we can fix the problem quickly.
+        **Never share your API key or password in this issue.**
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What bug did you face?
+      description: Tell us what went wrong.
+      placeholder: "e.g. The video does not play, or the AI gives no answer"
+    validations:
+      required: true
+  - type: textarea
+    id: what-doing
+    attributes:
+      label: What were you doing when it happened?
+      description: Step by step, so we can repeat it.
+      placeholder: |
+        1. Opened Study > Lectures
+        2. Pasted a YouTube link and tapped Add
+        3. Tapped Full screen
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: false
+  - type: input
+    id: device
+    attributes:
+      label: Phone model
+      placeholder: "e.g. Redmi Note 12, Samsung M31, OnePlus Nord"
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      description: Settings > About phone > Android version
+      placeholder: "e.g. Android 13"
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: EduSaathi version
+      description: The release you installed, e.g. v4.2
+      placeholder: "e.g. v4.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where did the bug happen?
+      options:
+        - Lectures / YouTube player
+        - Full screen mode
+        - AI Tutor
+        - AI Summariser
+        - Doubts
+        - Planner / Agenda
+        - Community / Career
+        - Sign in / Profile
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: network
+    attributes:
+      label: Internet connection
+      options:
+        - Wi-Fi
+        - Mobile data
+        - Offline
+        - Not sure
+    validations:
+      required: false
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Sometimes
+        - Only once
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or screen recording
+      description: Drag and drop images or videos here. They help a lot!
+    validations:
+      required: false
