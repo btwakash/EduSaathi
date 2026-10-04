@@ -5,7 +5,7 @@
 # EduSaathi
 
 ### Your study buddy, all in one app.
-*Padhai ka saathi: lectures, AI tutor, planner aur bahut kuch.*
+*you academic saathi: lectures, AI tutor, planner and may more.*
 
 [![Download](https://img.shields.io/badge/⬇️_Download-Latest_APK-2ea44f?style=for-the-badge)](../../releases/latest)
 
