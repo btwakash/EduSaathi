@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Inject AI config
-        run: sed -i "s|__AI_KEY__|${{ secrets.GROQ_KEY }}|; s|__AI_MODEL__|${{ vars.AI_MODEL }}|; s|__AI_TPM__|${{ vars.AI_TPM }}|; s|__AI_PROXY_URL__||" www/index.html
+        run: sed -i "s|__AI_KEY__|${{ secrets.GROQ_API_KEY }}|; s|__AI_MODEL__|${{ vars.AI_MODEL }}|; s|__AI_TPM__|${{ vars.AI_TPM }}|; s|__AI_PROXY_URL__||" www/index.html
       - name: Verify key was injected
         run: grep -q "gsk_" www/index.html
       - uses: actions/setup-node@v4
