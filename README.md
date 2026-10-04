@@ -80,6 +80,5 @@ Open an **[Issue](../../issues/new)** and tell us:
 ---
 
 <div align="center">
-Made with ❤️ by a student for students. 
-##Happy studying!
+Made with ❤️ by a student for students. Happy studying!
 </div>
