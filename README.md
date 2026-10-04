@@ -1,6 +1,8 @@
 <div align="center">
 
-# 📚 EduSaathi
+<img src="logo.png" width="120" alt="EduSaathi logo">
+
+# EduSaathi
 
 ### Your study buddy, all in one app.
 *Padhai ka saathi: lectures, AI tutor, planner aur bahut kuch.*
