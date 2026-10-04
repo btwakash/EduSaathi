@@ -13,16 +13,16 @@ jobs:
 
       - name: Check setup
         env:
-          K: ${{ secrets.GROQ_KEY }}
+          K: ${{ secrets.GROQ_API_KEY || secrets.GROQ_KEY }}
         run: |
           if [ ! -f www/index.html ]; then echo "::error::www/index.html not found in repo"; exit 1; fi
           if ! grep -q "__AI_KEY__" www/index.html; then echo "::error::www/index.html is the OLD version (no __AI_KEY__ placeholder). Replace it with the new index.html"; exit 1; fi
-          if [ -z "$K" ]; then echo "::error::Secret GROQ_KEY is missing or empty. Add it in Settings > Secrets and variables > Actions > Secrets (Repository secrets)"; exit 1; fi
-          case "$K" in gsk_*) ;; *) echo "::error::GROQ_KEY value does not start with gsk_"; exit 1;; esac
+          if [ -z "$K" ]; then echo "::error::Secret GROQ_API_KEY is missing or empty. Add it in Settings > Secrets and variables > Actions > Secrets (Repository secrets)"; exit 1; fi
+          case "$K" in gsk_*) ;; *) echo "::error::GROQ_API_KEY value does not start with gsk_"; exit 1;; esac
 
       - name: Inject AI config
         env:
-          K: ${{ secrets.GROQ_KEY }}
+          K: ${{ secrets.GROQ_API_KEY || secrets.GROQ_KEY }}
           M: ${{ vars.AI_MODEL }}
           T: ${{ vars.AI_TPM }}
         run: sed -i "s|__AI_KEY__|$K|; s|__AI_MODEL__|$M|; s|__AI_TPM__|$T|; s|__AI_PROXY_URL__||" www/index.html
